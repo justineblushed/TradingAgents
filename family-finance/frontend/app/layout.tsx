@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import "./globals.css";
+import NavLinks from "./nav-links";
 
 export const metadata: Metadata = {
   title: "Family Finance Tracker",
@@ -20,14 +20,7 @@ export default function RootLayout({
             <h1 className="text-xl font-semibold text-brand-700">
               Family Finance Tracker
             </h1>
-            <nav className="flex gap-4 text-sm font-medium">
-              <Link href="/" className="hover:text-brand-600">
-                Dashboard
-              </Link>
-              <Link href="/upload" className="hover:text-brand-600">
-                Upload Statement
-              </Link>
-            </nav>
+            <NavLinks />
           </header>
           <main>{children}</main>
         </div>

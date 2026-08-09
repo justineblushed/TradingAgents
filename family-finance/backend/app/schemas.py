@@ -36,6 +36,14 @@ class TransactionOut(BaseModel):
         from_attributes = True
 
 
+class CategoryOut(BaseModel):
+    id: int
+    name: str
+
+    class Config:
+        from_attributes = True
+
+
 class AccountCreate(BaseModel):
     name: str
     institution: str = ""

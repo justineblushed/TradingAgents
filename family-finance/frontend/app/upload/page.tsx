@@ -3,35 +3,27 @@
 import { useEffect, useState } from "react";
 import {
   Account,
+  Category,
   ParsedTransaction,
   confirmStatement,
   createAccount,
   listAccounts,
+  listCategories,
   previewStatement,
 } from "@/lib/api";
-
-const CATEGORY_OPTIONS = [
-  "Groceries",
-  "Dining",
-  "Travel & Lodging",
-  "Fuel & Parking",
-  "Telecom & Utilities",
-  "Health",
-  "Payments & Credits",
-  "Interest & Fees",
-  "Uncategorized",
-];
 
 export default function UploadPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [accountId, setAccountId] = useState<number | null>(null);
   const [newAccountName, setNewAccountName] = useState("");
+  const [categories, setCategories] = useState<Category[]>([]);
   const [statementYear, setStatementYear] = useState(new Date().getFullYear());
   const [periodLabel, setPeriodLabel] = useState("");
   const [transactions, setTransactions] = useState<ParsedTransaction[] | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
-  const [busy, setBusy] = useState(false);
+  const [phase, setPhase] = useState<"idle" | "parsing" | "importing">("idle");
   const [message, setMessage] = useState<string | null>(null);
+  const busy = phase !== "idle";
 
   useEffect(() => {
     listAccounts()
@@ -41,6 +33,11 @@ export default function UploadPage() {
       })
       .catch((err) =>
         setMessage(err instanceof Error ? err.message : "Failed to load accounts")
+      );
+    listCategories()
+      .then(setCategories)
+      .catch((err) =>
+        setMessage(err instanceof Error ? err.message : "Failed to load categories")
       );
   }, []);
 
@@ -63,7 +60,7 @@ export default function UploadPage() {
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    setBusy(true);
+    setPhase("parsing");
     setMessage(null);
     try {
       const preview = await previewStatement(file, statementYear);
@@ -72,7 +69,7 @@ export default function UploadPage() {
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Failed to parse statement");
     } finally {
-      setBusy(false);
+      setPhase("idle");
     }
   }
 
@@ -86,7 +83,7 @@ export default function UploadPage() {
 
   async function handleConfirm() {
     if (!accountId || !transactions) return;
-    setBusy(true);
+    setPhase("importing");
     setMessage(null);
     try {
       const result = await confirmStatement(accountId, periodLabel, transactions);
@@ -95,7 +92,7 @@ export default function UploadPage() {
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Failed to import");
     } finally {
-      setBusy(false);
+      setPhase("idle");
     }
   }
 
@@ -185,6 +182,12 @@ export default function UploadPage() {
             selected.
           </p>
         )}
+        {phase === "parsing" && (
+          <p className="mt-2 flex items-center gap-2 text-xs font-medium text-brand-700">
+            <span className="h-3 w-3 animate-spin rounded-full border-2 border-brand-300 border-t-brand-700" />
+            Parsing statement…
+          </p>
+        )}
         <p className="mt-3 text-xs text-slate-400">
           The PDF is parsed locally by your own backend and never saved to disk —
           only the transactions you confirm below get stored.
@@ -242,13 +245,20 @@ export default function UploadPage() {
                     </td>
                     <td>
                       <select
-                        value={t.suggested_category ?? "Uncategorized"}
+                        value={t.suggested_category ?? ""}
                         onChange={(e) => updateCategory(i, e.target.value)}
-                        className="rounded-md border border-slate-300 px-1 py-0.5 text-xs"
+                        className={`rounded-md border px-1 py-0.5 text-xs ${
+                          t.suggested_category
+                            ? "border-slate-300"
+                            : "border-amber-300 bg-amber-50"
+                        }`}
                       >
-                        {CATEGORY_OPTIONS.map((c) => (
-                          <option key={c} value={c}>
-                            {c}
+                        {!t.suggested_category && (
+                          <option value="">Uncategorized</option>
+                        )}
+                        {categories.map((c) => (
+                          <option key={c.id} value={c.name}>
+                            {c.name}
                           </option>
                         ))}
                       </select>

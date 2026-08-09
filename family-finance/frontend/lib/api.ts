@@ -31,6 +31,20 @@ export type DashboardSummary = {
   by_category: Record<string, number>;
 };
 
+export type Category = {
+  id: number;
+  name: string;
+};
+
+export type Transaction = {
+  id: number;
+  trans_date: string;
+  post_date: string | null;
+  description: string;
+  amount: number;
+  category: string | null;
+};
+
 async function asJson<T>(res: Response): Promise<T> {
   if (!res.ok) {
     const text = await res.text();
@@ -89,4 +103,27 @@ export async function confirmStatement(
 export async function getDashboardSummary(month?: string): Promise<DashboardSummary> {
   const qs = month ? `?month=${month}` : "";
   return asJson(await fetch(`${API_BASE}/dashboard/summary${qs}`));
+}
+
+export async function listCategories(): Promise<Category[]> {
+  return asJson(await fetch(`${API_BASE}/categories`));
+}
+
+export async function listTransactions(month?: string): Promise<Transaction[]> {
+  const qs = month ? `?month=${month}` : "";
+  return asJson(await fetch(`${API_BASE}/transactions${qs}`));
+}
+
+export async function setTransactionCategory(
+  transactionId: number,
+  categoryName: string
+): Promise<void> {
+  await asJson(
+    await fetch(
+      `${API_BASE}/transactions/${transactionId}/category?category_name=${encodeURIComponent(
+        categoryName
+      )}`,
+      { method: "PATCH" }
+    )
+  );
 }
