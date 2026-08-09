@@ -38,7 +38,22 @@ app needs to change to add a second bank format.
 
 ## Running locally
 
-### Backend
+### Quick start (recommended)
+
+```bash
+./start.sh
+```
+
+One command, one terminal tab. First run sets up the backend venv and
+runs `npm install` automatically; later runs skip straight to starting
+both services. `Ctrl+C` stops both cleanly. Backend on
+`http://localhost:8000`, frontend on `http://localhost:3000`.
+
+### Running each service by hand
+
+Useful for debugging one side in isolation.
+
+#### Backend
 
 ```bash
 cd backend
@@ -58,7 +73,7 @@ data is ever checked into this repo):
 pytest tests/
 ```
 
-### Frontend
+#### Frontend
 
 ```bash
 cd frontend
