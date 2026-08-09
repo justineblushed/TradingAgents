@@ -24,3 +24,8 @@ frontend/tsconfig.tsbuildinfo
 
 # OS/editor noise
 .DS_Store
+
+# Un-ignore our frontend/lib — the repo-root .gitignore has a generic
+# Python-venv "lib/" rule that would otherwise swallow this directory.
+!frontend/lib/
+!frontend/lib/**
