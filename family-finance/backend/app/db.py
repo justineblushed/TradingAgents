@@ -36,12 +36,20 @@ def _migrate_existing_tables() -> None:
     with engine.begin() as conn:
         if inspector.has_table("categories"):
             cols = _column_names(inspector, "categories")
+            had_is_income = "is_income" in cols
             if "kind" not in cols:
                 conn.execute(text("ALTER TABLE categories ADD COLUMN kind VARCHAR(20) DEFAULT 'expense'"))
-                if "is_income" in cols:
+                if had_is_income:
                     conn.execute(
                         text("UPDATE categories SET kind = 'income' WHERE is_income = 1")
                     )
+            if had_is_income:
+                # is_income was NOT NULL with no database-level default. The
+                # ORM no longer sets it on insert (kind replaced it), so every
+                # new category would violate that constraint until the
+                # column itself is gone. (Needs SQLite 3.35+ for DROP COLUMN
+                # — universal on any Python 3.9+ install.)
+                conn.execute(text("ALTER TABLE categories DROP COLUMN is_income"))
             # An earlier default taxonomy used "Payments & Credits" for card
             # payments, filed as a plain expense — force it to transfer so
             # already-imported payments retroactively stop counting as
