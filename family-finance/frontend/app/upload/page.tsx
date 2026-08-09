@@ -23,7 +23,12 @@ export default function UploadPage() {
   const [warnings, setWarnings] = useState<string[]>([]);
   const [phase, setPhase] = useState<"idle" | "parsing" | "importing">("idle");
   const [message, setMessage] = useState<string | null>(null);
+  const [showAddAccount, setShowAddAccount] = useState(false);
   const busy = phase !== "idle";
+  // With zero accounts there's nothing to pick from, so skip the dropdown
+  // entirely and go straight to the add-account form instead of showing it
+  // empty and making the user find a toggle to reveal the only usable path.
+  const addAccountVisible = accounts.length === 0 || showAddAccount;
 
   useEffect(() => {
     listAccounts()
@@ -52,6 +57,7 @@ export default function UploadPage() {
       setAccounts((prev) => [...prev, account]);
       setAccountId(account.id);
       setNewAccountName("");
+      setShowAddAccount(false);
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Failed to create account");
     }
@@ -99,46 +105,80 @@ export default function UploadPage() {
   return (
     <div className="space-y-6">
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <h2 className="mb-3 text-sm font-medium text-slate-600">
-          1. Choose account &amp; statement PDF
-        </h2>
+        <h2 className="mb-3 text-sm font-medium text-slate-600">1. Account</h2>
+
+        {accounts.length > 0 && (
+          <div className="flex flex-wrap items-end gap-4">
+            <div>
+              <label className="block text-xs text-slate-500">
+                Which account is this statement for?
+              </label>
+              <select
+                value={accountId ?? ""}
+                onChange={(e) => setAccountId(Number(e.target.value))}
+                className="mt-1 rounded-md border border-slate-300 px-2 py-1 text-sm"
+              >
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {!addAccountVisible && (
+              <button
+                onClick={() => setShowAddAccount(true)}
+                className="text-sm font-medium text-brand-600 hover:text-brand-700"
+              >
+                + Add a new account
+              </button>
+            )}
+          </div>
+        )}
+
+        {addAccountVisible && (
+          <div className={accounts.length > 0 ? "mt-4 border-t border-slate-100 pt-4" : ""}>
+            <label className="block text-xs text-slate-500">
+              {accounts.length === 0
+                ? "You don't have any accounts yet — add your first one:"
+                : "New account name"}
+            </label>
+            <div className="mt-1 flex items-center gap-2">
+              <input
+                placeholder="e.g. Rogers Mastercard"
+                value={newAccountName}
+                onChange={(e) => setNewAccountName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleCreateAccount()}
+                className="rounded-md border border-slate-300 px-2 py-1 text-sm"
+                autoFocus={accounts.length === 0}
+              />
+              <button
+                onClick={handleCreateAccount}
+                disabled={!newAccountName.trim()}
+                className="rounded-md bg-brand-500 px-3 py-1 text-sm font-medium text-white hover:bg-brand-600 disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                Add
+              </button>
+              {accounts.length > 0 && (
+                <button
+                  onClick={() => {
+                    setShowAddAccount(false);
+                    setNewAccountName("");
+                  }}
+                  className="text-sm text-slate-400 hover:text-slate-600"
+                >
+                  Cancel
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <h2 className="mb-3 text-sm font-medium text-slate-600">2. Statement PDF</h2>
 
         <div className="flex flex-wrap items-end gap-4">
-          <div>
-            <label className="block text-xs text-slate-500">Account</label>
-            <select
-              value={accountId ?? ""}
-              onChange={(e) => setAccountId(Number(e.target.value))}
-              className="mt-1 rounded-md border border-slate-300 px-2 py-1 text-sm"
-            >
-              {accounts.length === 0 && (
-                <option value="" disabled>
-                  No accounts yet — add one below
-                </option>
-              )}
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex items-end gap-2">
-            <input
-              placeholder="New account name (e.g. Rogers Mastercard)"
-              value={newAccountName}
-              onChange={(e) => setNewAccountName(e.target.value)}
-              className="rounded-md border border-slate-300 px-2 py-1 text-sm"
-            />
-            <button
-              onClick={handleCreateAccount}
-              className="rounded-md bg-slate-100 px-3 py-1 text-sm hover:bg-slate-200"
-            >
-              Add
-            </button>
-          </div>
-
           <div>
             <label className="block text-xs text-slate-500">Statement year</label>
             <input
@@ -178,8 +218,8 @@ export default function UploadPage() {
         </div>
         {!accountId && (
           <p className="mt-2 text-xs font-medium text-amber-700">
-            Add an account above first — "Choose PDF" stays disabled until one is
-            selected.
+            Choose or add an account above first — "Choose PDF" stays disabled
+            until one is selected.
           </p>
         )}
         {phase === "parsing" && (
