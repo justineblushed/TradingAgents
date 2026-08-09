@@ -39,9 +39,20 @@ class TransactionOut(BaseModel):
 class CategoryOut(BaseModel):
     id: int
     name: str
+    is_income: bool = False
+    keywords: list[str] = []
 
     class Config:
         from_attributes = True
+
+
+class CategoryCreate(BaseModel):
+    name: str
+    is_income: bool = False
+
+
+class CategoryKeywordsUpdate(BaseModel):
+    keywords: list[str]
 
 
 class AccountCreate(BaseModel):

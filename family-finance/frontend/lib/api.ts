@@ -34,6 +34,8 @@ export type DashboardSummary = {
 export type Category = {
   id: number;
   name: string;
+  is_income: boolean;
+  keywords: string[];
 };
 
 export type Transaction = {
@@ -107,6 +109,38 @@ export async function getDashboardSummary(month?: string): Promise<DashboardSumm
 
 export async function listCategories(): Promise<Category[]> {
   return asJson(await fetch(`${API_BASE}/categories`));
+}
+
+export async function createCategory(
+  name: string,
+  isIncome = false
+): Promise<Category> {
+  return asJson(
+    await fetch(`${API_BASE}/categories`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, is_income: isIncome }),
+    })
+  );
+}
+
+export async function updateCategoryKeywords(
+  categoryId: number,
+  keywords: string[]
+): Promise<Category> {
+  return asJson(
+    await fetch(`${API_BASE}/categories/${categoryId}/keywords`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ keywords }),
+    })
+  );
+}
+
+export async function deleteCategory(categoryId: number): Promise<void> {
+  await asJson(
+    await fetch(`${API_BASE}/categories/${categoryId}`, { method: "DELETE" })
+  );
 }
 
 export async function listTransactions(month?: string): Promise<Transaction[]> {
