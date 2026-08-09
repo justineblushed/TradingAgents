@@ -114,6 +114,11 @@ export default function UploadPage() {
               onChange={(e) => setAccountId(Number(e.target.value))}
               className="mt-1 rounded-md border border-slate-300 px-2 py-1 text-sm"
             >
+              {accounts.length === 0 && (
+                <option value="" disabled>
+                  No accounts yet — add one below
+                </option>
+              )}
               {accounts.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.name}
@@ -157,7 +162,13 @@ export default function UploadPage() {
             />
           </div>
 
-          <label className="cursor-pointer rounded-md bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600">
+          <label
+            className={`rounded-md px-4 py-2 text-sm font-medium text-white ${
+              !accountId || busy
+                ? "cursor-not-allowed bg-slate-300"
+                : "cursor-pointer bg-brand-500 hover:bg-brand-600"
+            }`}
+          >
             Choose PDF
             <input
               type="file"
@@ -168,6 +179,12 @@ export default function UploadPage() {
             />
           </label>
         </div>
+        {!accountId && (
+          <p className="mt-2 text-xs font-medium text-amber-700">
+            Add an account above first — "Choose PDF" stays disabled until one is
+            selected.
+          </p>
+        )}
         <p className="mt-3 text-xs text-slate-400">
           The PDF is parsed locally by your own backend and never saved to disk —
           only the transactions you confirm below get stored.
