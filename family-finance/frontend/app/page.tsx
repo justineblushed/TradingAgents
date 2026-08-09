@@ -6,6 +6,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  Legend,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -60,6 +61,10 @@ export default function DashboardPage() {
         </p>
       )}
 
+      {!summary && !error && (
+        <p className="py-16 text-center text-sm text-slate-400">Loading…</p>
+      )}
+
       {summary && (
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -79,14 +84,20 @@ export default function DashboardPage() {
                       data={categoryData}
                       dataKey="value"
                       nameKey="name"
-                      outerRadius={100}
-                      label={({ name }) => name}
+                      outerRadius={90}
+                      isAnimationActive={false}
                     >
                       {categoryData.map((_, i) => (
                         <Cell key={i} fill={COLORS[i % COLORS.length]} />
                       ))}
                     </Pie>
                     <Tooltip formatter={(v: number) => `$${v.toFixed(2)}`} />
+                    <Legend
+                      layout="vertical"
+                      align="right"
+                      verticalAlign="middle"
+                      wrapperStyle={{ fontSize: 12 }}
+                    />
                   </PieChart>
                 </ResponsiveContainer>
               )}
@@ -102,7 +113,12 @@ export default function DashboardPage() {
                     <XAxis type="number" />
                     <YAxis type="category" dataKey="name" width={140} />
                     <Tooltip formatter={(v: number) => `$${v.toFixed(2)}`} />
-                    <Bar dataKey="value" fill="#2f6fed" radius={[0, 4, 4, 0]} />
+                    <Bar
+                      dataKey="value"
+                      fill="#2f6fed"
+                      radius={[0, 4, 4, 0]}
+                      isAnimationActive={false}
+                    />
                   </BarChart>
                 </ResponsiveContainer>
               )}
