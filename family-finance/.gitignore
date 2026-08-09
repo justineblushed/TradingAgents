@@ -1,0 +1,26 @@
+# Never commit real financial data or local database files
+backend/data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Python
+backend/.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+
+# Node / Next.js
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/tsconfig.tsbuildinfo
+
+# Env files may contain local secrets/paths
+.env
+.env.local
+*.env.local
+
+# OS/editor noise
+.DS_Store

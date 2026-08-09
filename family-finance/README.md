@@ -1,0 +1,109 @@
+# Family Finance Tracker
+
+A local-first, self-hosted app for tracking family spending and financial
+health — built as its own isolated project, unrelated to the rest of this
+repository. Inspired by tools like Optiml for the "financial health
+score" framing, but scoped to run entirely on hardware you control.
+
+## Why local-first
+
+No bank credentials, no aggregator (Plaid, etc.), no cloud database.
+Statements are exported by you from your bank's site as PDF, uploaded
+through the app's own UI, parsed in memory, and reviewed before anything
+is saved. The source PDF is never written to disk and never leaves the
+machine running the backend.
+
+## Current scope (Phase 1 — MVP)
+
+- Upload a credit-card statement PDF → preview parsed transactions →
+  edit categories inline → confirm import.
+- Keyword-based auto-categorization with editable rules
+  (`backend/app/categorize.py`).
+- Monthly dashboard: charges, credits/payments, net change, category
+  breakdown (pie + bar).
+- SQLite by default — a single file, easy to back up, easy to move to
+  Postgres later by changing `DATABASE_URL`.
+- No login. Safe for Phase 1 because everything stays on your own
+  machine; auth is added before Phase 3 (see below).
+
+### Statement format supported today
+
+A tabular "Trans Date | Post Date | Description | Amount" layout with
+optional "FOREIGN CURRENCY ..." sub-lines — this covers the Rogers Bank
+Mastercard layout it was built against and is likely shared by other
+issuers using similar statement templates. Different banks/layouts need
+a new parser module under `backend/app/parsers/` — the existing one
+(`creditcard_statement.py`) is a template for that; nothing else in the
+app needs to change to add a second bank format.
+
+## Running locally
+
+### Backend
+
+```bash
+cd backend
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+cp .env.example .env   # adjust if needed
+uvicorn app.main:app --reload
+```
+
+Runs on `http://localhost:8000`. Data lives in `backend/data/` (gitignored —
+never committed).
+
+Run the parser test suite (all fixtures are fabricated, no real statement
+data is ever checked into this repo):
+
+```bash
+pytest tests/
+```
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+cp .env.local.example .env.local   # points at the backend above
+npm run dev
+```
+
+Runs on `http://localhost:3000`. Open it, add an account, upload a
+statement PDF, review the parsed transactions and categories, confirm
+the import, then check the dashboard.
+
+### Turning it into a clickable Mac app
+
+No native build needed for the MVP — open `http://localhost:3000` in
+Safari and "Add to Dock" (or use a wrapper like Unite/Fluid) to get an
+icon that launches straight into the app.
+
+## Roadmap
+
+**Phase 2 — financial health tracking**
+- Net worth (assets/debts entered manually), savings rate, debt-to-income,
+  retirement progress vs. a goal — the "health score" dashboard, the part
+  most directly inspired by Optiml.
+- Multiple accounts (chequing/savings/investment), multiple family members
+  with their own login and permissions.
+
+**Phase 3 — hosting & automation**
+- Deploy backend + Postgres + frontend on TrueNAS via Docker Compose.
+- Tailscale between TrueNAS, laptops, and phones — the app is reachable
+  only over your private tailnet, never exposed to the public internet.
+  This is the security boundary that makes it safe to stop being
+  local-only.
+- n8n (running alongside on TrueNAS) for automation: monthly reminders to
+  upload a statement, a scheduled summary email, or watching a folder for
+  new statement PDFs and calling `/statements/preview` automatically.
+- Add authentication once more than one person / more than one device is
+  using the app.
+
+## Security notes
+
+- Uploaded PDFs are processed in memory (`UploadFile.read()` → parser →
+  discarded) and are never written to disk by the backend.
+- The SQLite database and any `data/` directory are gitignored — nothing
+  with real transactions or balances is ever committed.
+- Parser tests use fabricated merchant names/dates/amounts, never a real
+  statement, so the repo's history stays free of anyone's real financial
+  data even in test fixtures.
