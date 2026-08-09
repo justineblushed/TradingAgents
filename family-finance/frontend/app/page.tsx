@@ -14,7 +14,12 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { DashboardSummary, getDashboardSummary } from "@/lib/api";
+import {
+  CreditCardSummary,
+  DashboardSummary,
+  getCreditCardSummaries,
+  getDashboardSummary,
+} from "@/lib/api";
 
 const COLORS = ["#2f6fed", "#22c55e", "#f59e0b", "#ef4444", "#a855f7", "#0ea5e9", "#64748b"];
 
@@ -26,11 +31,17 @@ function currentMonth(): string {
 export default function DashboardPage() {
   const [month, setMonth] = useState(currentMonth());
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [cards, setCards] = useState<CreditCardSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    setSummary(null);
+    setCards(null);
     getDashboardSummary(month)
       .then(setSummary)
+      .catch((e) => setError(e.message));
+    getCreditCardSummaries(month)
+      .then(setCards)
       .catch((e) => setError(e.message));
   }, [month]);
 
@@ -68,10 +79,14 @@ export default function DashboardPage() {
       {summary && (
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <StatCard label="Charges" value={summary.total_charges} tone="expense" />
-            <StatCard label="Credits & Payments" value={summary.total_credits} tone="income" />
-            <StatCard label="Net Change" value={summary.net_change} tone="neutral" />
+            <StatCard label="Spending" value={summary.total_spending} tone="expense" />
+            <StatCard label="Income" value={summary.total_income} tone="income" />
+            <StatCard label="Net Cash Flow" value={summary.net_cash_flow} tone="neutral" />
           </div>
+          <p className="text-xs text-slate-400">
+            Credit card payments aren't counted here — paying off your own card
+            is a transfer between your own accounts, not spending or income.
+          </p>
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <ChartCard title="Spending by Category">
@@ -126,6 +141,62 @@ export default function DashboardPage() {
           </div>
         </>
       )}
+
+      {cards && cards.length > 0 && (
+        <div>
+          <h2 className="mb-3 text-sm font-medium text-slate-600">Credit Cards</h2>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {cards.map((c) => (
+              <CreditCardCard key={c.account_id} card={c} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CreditCardCard({ card }: { card: CreditCardSummary }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <p className="mb-2 text-sm font-medium text-slate-700">{card.name}</p>
+      <dl className="space-y-1.5 text-sm">
+        <Row
+          label="Current balance"
+          value={
+            card.current_balance !== null
+              ? `$${card.current_balance.toFixed(2)}${
+                  card.balance_is_estimated ? " (estimated)" : ""
+                }`
+              : "—"
+          }
+        />
+        <Row
+          label="Available credit"
+          value={card.available_credit !== null ? `$${card.available_credit.toFixed(2)}` : "—"}
+        />
+        <Row label="This month's spending" value={`$${card.month_spending.toFixed(2)}`} />
+        <Row
+          label="Payments made"
+          value={`$${card.month_payments.toFixed(2)}`}
+          muted
+        />
+      </dl>
+      {card.balance_is_estimated && card.current_balance !== null && (
+        <p className="mt-2 text-xs text-slate-400">
+          No balance recorded yet — estimated from imported transactions. Add a
+          real balance on the Net Worth page for accuracy.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function Row({ label, value, muted }: { label: string; value: string; muted?: boolean }) {
+  return (
+    <div className="flex items-center justify-between">
+      <dt className={muted ? "text-slate-400" : "text-slate-500"}>{label}</dt>
+      <dd className={muted ? "text-slate-400" : "font-medium text-slate-800"}>{value}</dd>
     </div>
   );
 }

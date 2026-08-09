@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.dateutil import month_bounds
 from app.db import get_db
 from app.models import Category, Transaction
 from app.schemas import TransactionOut
@@ -12,13 +13,8 @@ router = APIRouter(prefix="/transactions", tags=["transactions"])
 def list_transactions(month: str | None = None, db: Session = Depends(get_db)):
     query = db.query(Transaction)
     if month:
-        year, mon = (int(part) for part in month.split("-"))
-        query = query.filter(
-            Transaction.trans_date >= f"{year:04d}-{mon:02d}-01",
-            Transaction.trans_date < f"{year:04d}-{mon + 1:02d}-01"
-            if mon < 12
-            else f"{year + 1:04d}-01-01",
-        )
+        start, end = month_bounds(month)
+        query = query.filter(Transaction.trans_date >= start, Transaction.trans_date < end)
     rows = query.order_by(Transaction.trans_date).all()
     return [
         TransactionOut(

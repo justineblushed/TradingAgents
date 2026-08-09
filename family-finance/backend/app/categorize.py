@@ -9,18 +9,22 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
-from app.models import Category, CategoryRule
+from app.models import Category, CategoryKind, CategoryRule
 
 
 @dataclass
 class DefaultCategory:
     keywords: list[str]
-    is_income: bool = False
+    kind: CategoryKind = CategoryKind.expense
 
 
 # Matches the categories actually used in the household's own transaction
 # tracking, so day-one suggestions line up with existing habits instead of a
 # generic placeholder taxonomy nobody asked for.
+#
+# "Credit Card Payment" is kind=transfer, not income or expense: paying off
+# your own card is money moving between your own accounts, not spending —
+# it must never inflate the household spending/income totals.
 DEFAULT_RULES: dict[str, DefaultCategory] = {
     "Grocery": DefaultCategory(
         ["superstore", "walmart", "costco wholesale", "lucky supermarket",
@@ -45,9 +49,14 @@ DEFAULT_RULES: dict[str, DefaultCategory] = {
     "Travel": DefaultCategory(["airbnb", "hertz", "uber", "flair", "hotel", "airline"]),
     "Kids / Childcare": DefaultCategory(["daycare", "childcare"]),
     "Misc spending": DefaultCategory(["temu", "amzn", "amazon", "home depot", "rona", "ikea"]),
-    "Payroll": DefaultCategory(["payroll deposit", "funds transfer pay "], is_income=True),
-    "Rental Income": DefaultCategory(["interac e-transfer receive"], is_income=True),
-    "CCB / GST": DefaultCategory(["ccb", "gst credit"], is_income=True),
+    "Interest & Fees": DefaultCategory(["cash interest", "interest charged", "annual fee", "late fee"]),
+    "Credit Card Payment": DefaultCategory(
+        ["payment, thank you", "payment received", "pre-authorized payment"],
+        kind=CategoryKind.transfer,
+    ),
+    "Payroll": DefaultCategory(["payroll deposit", "funds transfer pay "], kind=CategoryKind.income),
+    "Rental Income": DefaultCategory(["interac e-transfer receive"], kind=CategoryKind.income),
+    "CCB / GST": DefaultCategory(["ccb", "gst credit"], kind=CategoryKind.income),
 }
 
 
@@ -56,7 +65,7 @@ def seed_default_categories(db: Session) -> None:
     for name, default in DEFAULT_RULES.items():
         if name in existing:
             continue
-        category = Category(name=name, is_income=default.is_income)
+        category = Category(name=name, kind=default.kind)
         db.add(category)
         db.flush()
         for keyword in default.keywords:

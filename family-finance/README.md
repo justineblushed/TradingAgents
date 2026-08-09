@@ -13,18 +13,34 @@ through the app's own UI, parsed in memory, and reviewed before anything
 is saved. The source PDF is never written to disk and never leaves the
 machine running the backend.
 
-## Current scope (Phase 1 — MVP)
+## Current scope
 
 - Upload a credit-card statement PDF → preview parsed transactions →
   edit categories inline → confirm import.
-- Keyword-based auto-categorization with editable rules
-  (`backend/app/categorize.py`).
-- Monthly dashboard: charges, credits/payments, net change, category
-  breakdown (pie + bar).
+- Self-service categories (`/categories` page): add/edit keywords/delete,
+  each one tagged `expense`, `income`, or `transfer`.
+- **Cash flow vs. balance sheet are modeled separately, on purpose:**
+  - *Cash flow* (`/dashboard`, `/transactions`): spending and income for
+    a month, computed from imported transactions. Transactions in a
+    `transfer`-kind category (e.g. "Credit Card Payment") are excluded
+    entirely — paying off your own card is money moving between your
+    own accounts, not spending or income.
+  - *Balance sheet* (`/net-worth`): Assets − Liabilities = Net Worth,
+    plus the change vs. last month. Since there's no bank feed, balances
+    come from either a manually-recorded snapshot (works for any
+    account) or, for credit cards with statements imported but no
+    snapshot yet, an estimate from the running transaction total
+    (clearly labeled "estimated").
+- Accounts cover both sides of the balance sheet: cash, chequing,
+  savings, investment, TFSA, RRSP, RESP (assets) and credit card,
+  mortgage, car loan (liabilities). Credit cards optionally track a
+  credit limit for an "available credit" figure.
 - SQLite by default — a single file, easy to back up, easy to move to
-  Postgres later by changing `DATABASE_URL`.
-- No login. Safe for Phase 1 because everything stays on your own
-  machine; auth is added before Phase 3 (see below).
+  Postgres later by changing `DATABASE_URL`. Schema changes use small
+  hand-rolled `ALTER TABLE` migrations in `backend/app/db.py` (no
+  Alembic) so upgrading never requires deleting your data.
+- No login. Safe today because everything stays on your own machine;
+  auth is added before Phase 3 (see below).
 
 ### Statement format supported today
 
@@ -95,11 +111,13 @@ icon that launches straight into the app.
 ## Roadmap
 
 **Phase 2 — financial health tracking**
-- Net worth (assets/debts entered manually), savings rate, debt-to-income,
-  retirement progress vs. a goal — the "health score" dashboard, the part
-  most directly inspired by Optiml.
-- Multiple accounts (chequing/savings/investment), multiple family members
-  with their own login and permissions.
+- Net worth is live (assets/liabilities, manual balance snapshots, MoM
+  delta). Still open: savings rate, debt-to-income, retirement progress
+  vs. a goal — the rest of the Optiml-inspired "health score" dashboard.
+- A parser for bank/chequing statements (today only credit-card
+  statements are supported), so income and day-to-day account balances
+  stop needing manual entry.
+- Multiple family members with their own login and permissions.
 
 **Phase 3 — hosting & automation**
 - Deploy backend + Postgres + frontend on TrueNAS via Docker Compose.

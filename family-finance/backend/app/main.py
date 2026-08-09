@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import CORS_ORIGINS
 from app.db import init_db
-from app.routers import accounts, categories, dashboard, statements, transactions
+from app.routers import accounts, categories, dashboard, networth, statements, transactions
 
 app = FastAPI(title="Family Finance Tracker", version="0.1.0")
 
@@ -28,6 +28,7 @@ def health() -> dict:
 
 app.include_router(accounts.router)
 app.include_router(categories.router)
+app.include_router(networth.router)
 app.include_router(statements.router)
 app.include_router(transactions.router)
 app.include_router(dashboard.router)

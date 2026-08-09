@@ -3,17 +3,19 @@ from sqlalchemy.orm import Session
 
 from app.categorize import seed_default_categories
 from app.db import get_db
-from app.models import Category, CategoryRule, Transaction
+from app.models import Category, CategoryKind, CategoryRule, Transaction
 from app.schemas import CategoryCreate, CategoryKeywordsUpdate, CategoryOut
 
 router = APIRouter(prefix="/categories", tags=["categories"])
+
+_VALID_KINDS = {k.value for k in CategoryKind}
 
 
 def _to_out(category: Category) -> CategoryOut:
     return CategoryOut(
         id=category.id,
         name=category.name,
-        is_income=category.is_income,
+        kind=category.kind.value if hasattr(category.kind, "value") else category.kind,
         keywords=[r.keyword for r in category.rules],
     )
 
@@ -32,7 +34,9 @@ def create_category(payload: CategoryCreate, db: Session = Depends(get_db)):
         raise HTTPException(400, "Category name is required")
     if db.query(Category).filter(Category.name == name).first():
         raise HTTPException(409, "A category with this name already exists")
-    category = Category(name=name, is_income=payload.is_income)
+    if payload.kind not in _VALID_KINDS:
+        raise HTTPException(400, f"kind must be one of {sorted(_VALID_KINDS)}")
+    category = Category(name=name, kind=CategoryKind(payload.kind))
     db.add(category)
     db.commit()
     db.refresh(category)

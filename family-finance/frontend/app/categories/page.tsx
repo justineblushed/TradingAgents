@@ -3,18 +3,25 @@
 import { useEffect, useState } from "react";
 import {
   Category,
+  CategoryKind,
   createCategory,
   deleteCategory,
   listCategories,
   updateCategoryKeywords,
 } from "@/lib/api";
 
+const KIND_LABELS: Record<CategoryKind, string> = {
+  expense: "Expense",
+  income: "Income",
+  transfer: "Transfer (excluded from spending/income)",
+};
+
 export default function CategoriesPage() {
   const [categories, setCategories] = useState<Category[] | null>(null);
   const [keywordDrafts, setKeywordDrafts] = useState<Record<number, string>>({});
   const [savingId, setSavingId] = useState<number | null>(null);
   const [newName, setNewName] = useState("");
-  const [newIsIncome, setNewIsIncome] = useState(false);
+  const [newKind, setNewKind] = useState<CategoryKind>("expense");
   const [message, setMessage] = useState<string | null>(null);
 
   function load() {
@@ -36,9 +43,9 @@ export default function CategoriesPage() {
     if (!newName.trim()) return;
     setMessage(null);
     try {
-      await createCategory(newName.trim(), newIsIncome);
+      await createCategory(newName.trim(), newKind);
       setNewName("");
-      setNewIsIncome(false);
+      setNewKind("expense");
       load();
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Failed to add category");
@@ -81,8 +88,9 @@ export default function CategoriesPage() {
     }
   }
 
-  const expense = categories?.filter((c) => !c.is_income) ?? [];
-  const income = categories?.filter((c) => c.is_income) ?? [];
+  const expense = categories?.filter((c) => c.kind === "expense") ?? [];
+  const income = categories?.filter((c) => c.kind === "income") ?? [];
+  const transfer = categories?.filter((c) => c.kind === "transfer") ?? [];
 
   return (
     <div className="space-y-6">
@@ -96,14 +104,17 @@ export default function CategoriesPage() {
             onKeyDown={(e) => e.key === "Enter" && handleAddCategory()}
             className="rounded-md border border-slate-300 px-2 py-1 text-sm"
           />
-          <label className="flex items-center gap-1.5 text-sm text-slate-600">
-            <input
-              type="checkbox"
-              checked={newIsIncome}
-              onChange={(e) => setNewIsIncome(e.target.checked)}
-            />
-            Income category
-          </label>
+          <select
+            value={newKind}
+            onChange={(e) => setNewKind(e.target.value as CategoryKind)}
+            className="rounded-md border border-slate-300 px-2 py-1 text-sm"
+          >
+            {Object.entries(KIND_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
           <button
             onClick={handleAddCategory}
             disabled={!newName.trim()}
@@ -112,6 +123,10 @@ export default function CategoriesPage() {
             Add
           </button>
         </div>
+        <p className="mt-2 text-xs text-slate-400">
+          "Transfer" is for money moving between your own accounts — like
+          paying off a credit card — never counted as spending or income.
+        </p>
       </div>
 
       {message && (
@@ -134,6 +149,15 @@ export default function CategoriesPage() {
           <CategoryGroup
             title="Income categories"
             categories={income}
+            keywordDrafts={keywordDrafts}
+            setKeywordDrafts={setKeywordDrafts}
+            savingId={savingId}
+            onSave={handleSaveKeywords}
+            onDelete={handleDelete}
+          />
+          <CategoryGroup
+            title="Transfer categories (excluded from spending/income)"
+            categories={transfer}
             keywordDrafts={keywordDrafts}
             setKeywordDrafts={setKeywordDrafts}
             savingId={savingId}
