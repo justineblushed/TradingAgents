@@ -24,14 +24,18 @@ def _column_names(inspector, table_name: str) -> set[str]:
     return {col["name"] for col in inspector.get_columns(table_name)}
 
 
-def _migrate_existing_tables() -> None:
+def _migrate_existing_tables() -> bool:
     """Additive, hand-rolled migrations for columns added after the initial
     schema. There's no Alembic here — this is a personal single-file SQLite
     database, so a few explicit ALTER TABLEs are simpler and safer than
     pulling in a migration framework. Base.metadata.create_all() only
     creates *missing* tables; it never alters existing ones, so this runs
     right after it to bring older databases up to date without losing data.
+
+    Returns True when the cost_type/controllability columns were just added,
+    so the caller can backfill them once the taxonomy renames have run.
     """
+    added_classification_columns = False
     inspector = inspect(engine)
     with engine.begin() as conn:
         if inspector.has_table("categories"):
@@ -58,6 +62,14 @@ def _migrate_existing_tables() -> None:
                 conn.execute(
                     text("ALTER TABLE categories ADD COLUMN group_name VARCHAR(40) DEFAULT ''")
                 )
+            if "cost_type" not in cols:
+                conn.execute(
+                    text("ALTER TABLE categories ADD COLUMN cost_type VARCHAR(20) DEFAULT 'variable'")
+                )
+                conn.execute(
+                    text("ALTER TABLE categories ADD COLUMN controllability VARCHAR(20) DEFAULT 'medium'")
+                )
+                added_classification_columns = True
             # An earlier default taxonomy used "Payments & Credits" for card
             # payments, filed as a plain expense — force it to transfer so
             # already-imported payments retroactively stop counting as
@@ -77,6 +89,30 @@ def _migrate_existing_tables() -> None:
             # ORM enum can still load them.
             conn.execute(
                 text("UPDATE accounts SET account_type = 'other_asset' WHERE account_type = 'other'")
+            )
+
+    return added_classification_columns
+
+
+def _backfill_classification() -> None:
+    """Apply the agreed fixed/variable + controllability classification to the
+    built-in categories. Runs only right after those columns are created, and
+    after the taxonomy renames so names already match the current list — so it
+    can never overwrite a classification the user changed later."""
+    from app.categorize import DEFAULT_RULES
+
+    with engine.begin() as conn:
+        for cat_name, default in DEFAULT_RULES.items():
+            conn.execute(
+                text(
+                    "UPDATE categories SET cost_type = :cost, controllability = :ctrl "
+                    "WHERE name = :name"
+                ),
+                {
+                    "cost": default.cost.value,
+                    "ctrl": default.control.value,
+                    "name": cat_name,
+                },
             )
 
 
@@ -162,5 +198,7 @@ def init_db() -> None:
     from app import models  # noqa: F401  (ensure models are registered)
 
     Base.metadata.create_all(bind=engine)
-    _migrate_existing_tables()
+    needs_classification_backfill = _migrate_existing_tables()
     _migrate_category_taxonomy()
+    if needs_classification_backfill:
+        _backfill_classification()

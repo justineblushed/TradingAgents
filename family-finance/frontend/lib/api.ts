@@ -111,6 +111,23 @@ export type CoverageSummary = {
 
 export type CategoryKind = "expense" | "income" | "transfer";
 
+export type CostType = "fixed" | "recurring" | "variable" | "irregular";
+export type Controllability = "low" | "medium" | "high" | "very_high";
+
+export const COST_TYPE_LABELS: Record<CostType, string> = {
+  fixed: "Fixed",
+  recurring: "Recurring",
+  variable: "Variable",
+  irregular: "Irregular",
+};
+
+export const CONTROL_LABELS: Record<Controllability, string> = {
+  low: "Low",
+  medium: "Medium",
+  high: "High",
+  very_high: "Very high",
+};
+
 export type Category = {
   id: number;
   name: string;
@@ -118,6 +135,35 @@ export type Category = {
   keywords: string[];
   monthly_budget: number | null;
   group_name: string;
+  cost_type: CostType;
+  controllability: Controllability;
+};
+
+export type CostTypeSlice = {
+  cost_type: CostType;
+  label: string;
+  amount: number;
+  percent: number;
+};
+
+export type CutCandidate = {
+  category: string;
+  group_name: string;
+  cost_type: CostType;
+  controllability: Controllability;
+  spent: number;
+  reference: number;
+  over: number;
+  basis: string;
+};
+
+export type SpendingControl = {
+  month: string;
+  total_spending: number;
+  by_cost_type: CostTypeSlice[];
+  locked_amount: number;
+  cut_candidates: CutCandidate[];
+  potential_savings: number;
 };
 
 export const GROUP_ORDER = [
@@ -280,6 +326,25 @@ export async function confirmStatement(
 export async function getDashboardSummary(month?: string): Promise<DashboardSummary> {
   const qs = month ? `?month=${month}` : "";
   return asJson(await fetch(`${API_BASE}/dashboard/summary${qs}`));
+}
+
+export async function getSpendingControl(month?: string): Promise<SpendingControl> {
+  const qs = month ? `?month=${month}` : "";
+  return asJson(await fetch(`${API_BASE}/dashboard/spending-control${qs}`));
+}
+
+export async function updateCategoryClassification(
+  categoryId: number,
+  costType: CostType,
+  controllability: Controllability
+): Promise<Category> {
+  return asJson(
+    await fetch(`${API_BASE}/categories/${categoryId}/classification`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cost_type: costType, controllability }),
+    })
+  );
 }
 
 export async function getCreditCardSummaries(month?: string): Promise<CreditCardSummary[]> {

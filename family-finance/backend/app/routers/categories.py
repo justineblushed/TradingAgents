@@ -3,9 +3,17 @@ from sqlalchemy.orm import Session
 
 from app.categorize import seed_default_categories
 from app.db import get_db
-from app.models import Category, CategoryKind, CategoryRule, Transaction
+from app.models import (
+    Category,
+    CategoryKind,
+    CategoryRule,
+    Controllability,
+    CostType,
+    Transaction,
+)
 from app.schemas import (
     CategoryBudgetUpdate,
+    CategoryClassificationUpdate,
     CategoryCreate,
     CategoryKeywordsUpdate,
     CategoryOut,
@@ -14,6 +22,12 @@ from app.schemas import (
 router = APIRouter(prefix="/categories", tags=["categories"])
 
 _VALID_KINDS = {k.value for k in CategoryKind}
+_VALID_COST_TYPES = {c.value for c in CostType}
+_VALID_CONTROLS = {c.value for c in Controllability}
+
+
+def _enum_value(value) -> str:
+    return value.value if hasattr(value, "value") else (value or "")
 
 
 def _to_out(category: Category) -> CategoryOut:
@@ -26,6 +40,8 @@ def _to_out(category: Category) -> CategoryOut:
             float(category.monthly_budget) if category.monthly_budget is not None else None
         ),
         group_name=category.group_name or "",
+        cost_type=_enum_value(category.cost_type),
+        controllability=_enum_value(category.controllability),
     )
 
 
@@ -83,6 +99,28 @@ def set_budget(
     if payload.monthly_budget is not None and payload.monthly_budget < 0:
         raise HTTPException(400, "Budget cannot be negative")
     category.monthly_budget = payload.monthly_budget
+    db.commit()
+    db.refresh(category)
+    return _to_out(category)
+
+
+@router.put("/{category_id}/classification", response_model=CategoryOut)
+def set_classification(
+    category_id: int,
+    payload: CategoryClassificationUpdate,
+    db: Session = Depends(get_db),
+):
+    category = db.get(Category, category_id)
+    if category is None:
+        raise HTTPException(404, "Category not found")
+    if payload.cost_type not in _VALID_COST_TYPES:
+        raise HTTPException(400, f"cost_type must be one of {sorted(_VALID_COST_TYPES)}")
+    if payload.controllability not in _VALID_CONTROLS:
+        raise HTTPException(
+            400, f"controllability must be one of {sorted(_VALID_CONTROLS)}"
+        )
+    category.cost_type = CostType(payload.cost_type)
+    category.controllability = Controllability(payload.controllability)
     db.commit()
     db.refresh(category)
     return _to_out(category)

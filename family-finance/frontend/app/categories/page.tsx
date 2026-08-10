@@ -4,11 +4,16 @@ import { useEffect, useState } from "react";
 import {
   Category,
   CategoryKind,
+  CONTROL_LABELS,
+  COST_TYPE_LABELS,
+  Controllability,
+  CostType,
   GROUP_ORDER,
   createCategory,
   deleteCategory,
   listCategories,
   updateCategoryBudget,
+  updateCategoryClassification,
   updateCategoryKeywords,
 } from "@/lib/api";
 
@@ -84,6 +89,26 @@ export default function CategoriesPage() {
       );
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Failed to save budget");
+    }
+  }
+
+  async function handleSaveClassification(
+    category: Category,
+    costType: CostType,
+    controllability: Controllability
+  ) {
+    setMessage(null);
+    try {
+      const updated = await updateCategoryClassification(
+        category.id,
+        costType,
+        controllability
+      );
+      setCategories((prev) =>
+        prev ? prev.map((c) => (c.id === category.id ? updated : c)) : prev
+      );
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Failed to save classification");
     }
   }
 
@@ -192,6 +217,7 @@ export default function CategoriesPage() {
               onDelete={handleDelete}
               showBudget
               onSaveBudget={handleSaveBudget}
+              onSaveClassification={handleSaveClassification}
             />
           ))}
           <CategoryGroup
@@ -228,6 +254,7 @@ function CategoryGroup({
   onDelete,
   showBudget,
   onSaveBudget,
+  onSaveClassification,
 }: {
   title: string;
   categories: Category[];
@@ -238,6 +265,11 @@ function CategoryGroup({
   onDelete: (c: Category) => void;
   showBudget?: boolean;
   onSaveBudget?: (c: Category, budget: number | null) => void;
+  onSaveClassification?: (
+    c: Category,
+    costType: CostType,
+    controllability: Controllability
+  ) => void;
 }) {
   if (categories.length === 0) return null;
   return (
@@ -262,6 +294,46 @@ function CategoryGroup({
               />
               {showBudget && onSaveBudget && (
                 <BudgetInput category={c} onSave={onSaveBudget} />
+              )}
+              {onSaveClassification && (
+                <span className="flex items-center gap-1 text-xs">
+                  <select
+                    value={c.cost_type}
+                    onChange={(e) =>
+                      onSaveClassification(
+                        c,
+                        e.target.value as CostType,
+                        c.controllability
+                      )
+                    }
+                    title="Fixed costs are locked in; variable ones move with behaviour"
+                    className="rounded-md border border-slate-300 px-1 py-1 text-xs"
+                  >
+                    {Object.entries(COST_TYPE_LABELS).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={c.controllability}
+                    onChange={(e) =>
+                      onSaveClassification(
+                        c,
+                        c.cost_type,
+                        e.target.value as Controllability
+                      )
+                    }
+                    title="How much room there is to cut this month"
+                    className="rounded-md border border-slate-300 px-1 py-1 text-xs"
+                  >
+                    {Object.entries(CONTROL_LABELS).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label} control
+                      </option>
+                    ))}
+                  </select>
+                </span>
               )}
               {dirty && (
                 <button

@@ -112,6 +112,12 @@ def _month_flows(
     return spending, income, by_cat, by_group
 
 
+# Public aliases — the dashboard's spending-control analysis reuses the same
+# month-selection and flow rules so the two views can never disagree.
+recent_complete_months = _recent_complete_months
+month_flows = _month_flows
+
+
 def compute_health(db: Session) -> dict:
     months = _recent_complete_months(db)
     ref_month = months[0] if months else None

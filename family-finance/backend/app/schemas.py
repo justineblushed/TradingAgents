@@ -46,6 +46,8 @@ class CategoryOut(BaseModel):
     keywords: list[str] = []
     monthly_budget: float | None = None
     group_name: str = ""
+    cost_type: str = "variable"
+    controllability: str = "medium"
 
     class Config:
         from_attributes = True
@@ -53,6 +55,47 @@ class CategoryOut(BaseModel):
 
 class CategoryBudgetUpdate(BaseModel):
     monthly_budget: float | None = None
+
+
+class CategoryClassificationUpdate(BaseModel):
+    cost_type: str
+    controllability: str
+
+
+class CostTypeSlice(BaseModel):
+    cost_type: str
+    label: str
+    amount: float
+    percent: float
+
+
+class CutCandidate(BaseModel):
+    category: str
+    group_name: str
+    cost_type: str
+    controllability: str
+    spent: float
+    reference: float  # budget, or typical spending when no budget is set
+    over: float
+    basis: str  # "budget" | "typical spending"
+
+
+class SpendingControl(BaseModel):
+    """How much of the month's spending is actually adjustable.
+
+    Splits spending by cost type, then ranks the categories that are both
+    over their reference AND realistically controllable. Potential savings
+    counts only high/very-high controllability overages — an $800 car
+    repair is variable but not a choice, and promising it as "savings"
+    would make the number a lie.
+    """
+
+    month: str
+    total_spending: float
+    by_cost_type: list[CostTypeSlice]
+    locked_amount: float  # fixed + irregular: little room to adjust
+    cut_candidates: list[CutCandidate]
+    potential_savings: float
 
 
 class CategoryCreate(BaseModel):

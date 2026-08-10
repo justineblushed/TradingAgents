@@ -46,6 +46,29 @@ class CategoryKind(str, enum.Enum):
     transfer = "transfer"
 
 
+class CostType(str, enum.Enum):
+    """How much this spending is locked in month to month."""
+
+    fixed = "fixed"  # contractual, same every month (mortgage, car loan)
+    recurring = "recurring"  # regular but cancellable (subscriptions)
+    variable = "variable"  # changes with behaviour (groceries, dining)
+    irregular = "irregular"  # lumpy and unplanned (car repairs, medical)
+
+
+class Controllability(str, enum.Enum):
+    """How much room there realistically is to cut this month.
+
+    Deliberately separate from CostType: car maintenance is variable but
+    an $800 repair isn't a choice, while dining out is variable AND easy
+    to cut. Only the controllable part is offered as potential savings.
+    """
+
+    low = "low"
+    medium = "medium"
+    high = "high"
+    very_high = "very_high"
+
+
 class Account(Base):
     __tablename__ = "accounts"
 
@@ -102,6 +125,14 @@ class Category(Base):
     # Roll-up group for dashboard reading ("Housing", "Food", ...). Empty for
     # user-created categories that haven't been grouped.
     group_name: Mapped[str] = mapped_column(String(40), default="")
+    # Two independent dimensions used by the "where can I cut?" analysis.
+    # Meaningful for expense categories only.
+    cost_type: Mapped[CostType] = mapped_column(
+        Enum(CostType), default=CostType.variable
+    )
+    controllability: Mapped[Controllability] = mapped_column(
+        Enum(Controllability), default=Controllability.medium
+    )
 
     rules: Mapped[list["CategoryRule"]] = relationship(back_populates="category")
 
