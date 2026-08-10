@@ -9,6 +9,9 @@ class RawTransaction:
     description: str
     amount: float
     foreign_currency_note: str = ""
+    # Category name carried by the source itself (e.g. a CSV "Category"
+    # column) — used as the suggestion when it matches a known category.
+    category_hint: str = ""
 
 
 @dataclass

@@ -201,11 +201,13 @@ export default function UploadPage() {
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <h2 className="mb-3 text-sm font-medium text-slate-600">2. Statement PDF</h2>
+        <h2 className="mb-3 text-sm font-medium text-slate-600">2. Statement file</h2>
 
         <div className="flex flex-wrap items-end gap-4">
           <div>
-            <label className="block text-xs text-slate-500">Statement year</label>
+            <label className="block text-xs text-slate-500" title="PDF only — CSV files carry their own dates">
+              Statement year (PDF only)
+            </label>
             <input
               type="number"
               value={statementYear}
@@ -231,10 +233,10 @@ export default function UploadPage() {
                 : "cursor-pointer bg-brand-500 hover:bg-brand-600"
             }`}
           >
-            Choose PDF
+            Choose PDF or CSV
             <input
               type="file"
-              accept="application/pdf"
+              accept="application/pdf,.pdf,text/csv,.csv"
               onChange={handleFileChange}
               className="hidden"
               disabled={!accountId || busy}
@@ -243,8 +245,8 @@ export default function UploadPage() {
         </div>
         {!accountId && (
           <p className="mt-2 text-xs font-medium text-amber-700">
-            Choose or add an account above first — "Choose PDF" stays disabled
-            until one is selected.
+            Choose or add an account above first — the file picker stays
+            disabled until one is selected.
           </p>
         )}
         {phase === "parsing" && (
@@ -254,8 +256,11 @@ export default function UploadPage() {
           </p>
         )}
         <p className="mt-3 text-xs text-slate-400">
-          The PDF is parsed locally by your own backend and never saved to disk —
-          only the transactions you confirm below get stored.
+          Files are parsed locally by your own backend and never saved to disk —
+          only the transactions you confirm below get stored. CSVs need a date
+          column, a description/details column, and either an amount column or
+          funds out / funds in columns; a category column is used for
+          suggestions when present.
         </p>
       </div>
 

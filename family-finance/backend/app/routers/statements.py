@@ -14,6 +14,7 @@ from app.categorize import seed_default_categories, suggest_category
 from app.db import get_db
 from app.models import Account, Category, Statement, Transaction
 from app.parsers.creditcard_statement import parse_credit_card_statement
+from app.parsers.csv_statement import parse_csv_statement
 from app.schemas import ImportRequest, ParsedTransaction, StatementPreview
 
 router = APIRouter(prefix="/statements", tags=["statements"])
@@ -27,27 +28,46 @@ async def preview_statement(
     statement_year: int = Form(default_factory=lambda: datetime.utcnow().year),
     db: Session = Depends(get_db),
 ):
-    if file.content_type != "application/pdf":
-        raise HTTPException(400, "Only PDF statements are supported right now")
+    filename = (file.filename or "").lower()
+    is_csv = filename.endswith(".csv") or (file.content_type or "") in (
+        "text/csv",
+        "application/csv",
+    )
+    is_pdf = filename.endswith(".pdf") or file.content_type == "application/pdf"
+    if not is_csv and not is_pdf:
+        raise HTTPException(400, "Only PDF and CSV statements are supported")
 
-    pdf_bytes = await file.read()
-    if len(pdf_bytes) > _MAX_UPLOAD_BYTES:
+    raw = await file.read()
+    if len(raw) > _MAX_UPLOAD_BYTES:
         raise HTTPException(400, "File too large")
 
-    result = parse_credit_card_statement(pdf_bytes, statement_year=statement_year)
+    if is_csv:
+        result = parse_csv_statement(raw)
+    else:
+        result = parse_credit_card_statement(raw, statement_year=statement_year)
     seed_default_categories(db)
 
-    transactions = [
-        ParsedTransaction(
-            trans_date=t.trans_date,
-            post_date=t.post_date,
-            description=t.description,
-            amount=t.amount,
-            foreign_currency_note=t.foreign_currency_note,
-            suggested_category=suggest_category(db, t.description),
+    # CSVs can carry their own category column; use it when it names a known
+    # category (case-insensitive), otherwise fall back to keyword matching.
+    known = {c.name.lower(): c.name for c in db.query(Category).all()}
+
+    transactions = []
+    for t in result.transactions:
+        suggested = None
+        if t.category_hint:
+            suggested = known.get(t.category_hint.strip().lower())
+        if suggested is None:
+            suggested = suggest_category(db, t.description)
+        transactions.append(
+            ParsedTransaction(
+                trans_date=t.trans_date,
+                post_date=t.post_date,
+                description=t.description,
+                amount=t.amount,
+                foreign_currency_note=t.foreign_currency_note,
+                suggested_category=suggested,
+            )
         )
-        for t in result.transactions
-    ]
     return StatementPreview(
         account_last_four=result.account_last_four,
         transactions=transactions,
