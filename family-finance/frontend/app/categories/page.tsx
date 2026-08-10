@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import {
   Category,
   CategoryKind,
+  GROUP_ORDER,
   createCategory,
   deleteCategory,
   listCategories,
@@ -23,6 +24,7 @@ export default function CategoriesPage() {
   const [savingId, setSavingId] = useState<number | null>(null);
   const [newName, setNewName] = useState("");
   const [newKind, setNewKind] = useState<CategoryKind>("expense");
+  const [newGroup, setNewGroup] = useState("");
   const [message, setMessage] = useState<string | null>(null);
 
   function load() {
@@ -44,9 +46,10 @@ export default function CategoriesPage() {
     if (!newName.trim()) return;
     setMessage(null);
     try {
-      await createCategory(newName.trim(), newKind);
+      await createCategory(newName.trim(), newKind, newKind === "expense" ? newGroup : "");
       setNewName("");
       setNewKind("expense");
+      setNewGroup("");
       load();
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Failed to add category");
@@ -105,6 +108,19 @@ export default function CategoriesPage() {
   const income = categories?.filter((c) => c.kind === "income") ?? [];
   const transfer = categories?.filter((c) => c.kind === "transfer") ?? [];
 
+  const groupNames: string[] = [
+    ...GROUP_ORDER.filter((g) => expense.some((c) => c.group_name === g)),
+    ...(expense.some((c) => !c.group_name || !GROUP_ORDER.includes(c.group_name as any))
+      ? ["Other"]
+      : []),
+  ];
+  const expenseByGroup = (group: string) =>
+    group === "Other"
+      ? expense.filter(
+          (c) => !c.group_name || !GROUP_ORDER.includes(c.group_name as any)
+        )
+      : expense.filter((c) => c.group_name === group);
+
   return (
     <div className="space-y-6">
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -128,6 +144,20 @@ export default function CategoriesPage() {
               </option>
             ))}
           </select>
+          {newKind === "expense" && (
+            <select
+              value={newGroup}
+              onChange={(e) => setNewGroup(e.target.value)}
+              className="rounded-md border border-slate-300 px-2 py-1 text-sm"
+            >
+              <option value="">No group</option>
+              {GROUP_ORDER.map((g) => (
+                <option key={g} value={g}>
+                  {g}
+                </option>
+              ))}
+            </select>
+          )}
           <button
             onClick={handleAddCategory}
             disabled={!newName.trim()}
@@ -150,17 +180,20 @@ export default function CategoriesPage() {
         <p className="py-16 text-center text-sm text-slate-400">Loading…</p>
       ) : (
         <>
-          <CategoryGroup
-            title="Expense categories"
-            categories={expense}
-            keywordDrafts={keywordDrafts}
-            setKeywordDrafts={setKeywordDrafts}
-            savingId={savingId}
-            onSave={handleSaveKeywords}
-            onDelete={handleDelete}
-            showBudget
-            onSaveBudget={handleSaveBudget}
-          />
+          {groupNames.map((group) => (
+            <CategoryGroup
+              key={group}
+              title={`${group} — expenses`}
+              categories={expenseByGroup(group)}
+              keywordDrafts={keywordDrafts}
+              setKeywordDrafts={setKeywordDrafts}
+              savingId={savingId}
+              onSave={handleSaveKeywords}
+              onDelete={handleDelete}
+              showBudget
+              onSaveBudget={handleSaveBudget}
+            />
+          ))}
           <CategoryGroup
             title="Income categories"
             categories={income}

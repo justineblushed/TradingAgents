@@ -66,6 +66,14 @@ export default function DashboardPage() {
     [summary]
   );
 
+  const groupData = useMemo(
+    () =>
+      Object.entries(summary?.by_group ?? {})
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value),
+    [summary]
+  );
+
   return (
     <div className="space-y-8">
       <div className="flex items-center gap-3">
@@ -117,20 +125,20 @@ export default function DashboardPage() {
           </p>
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <ChartCard title="Spending by Category">
-              {categoryData.length === 0 ? (
+            <ChartCard title="Spending by Group">
+              {groupData.length === 0 ? (
                 <EmptyState />
               ) : (
                 <ResponsiveContainer width="100%" height={280}>
                   <PieChart>
                     <Pie
-                      data={categoryData}
+                      data={groupData}
                       dataKey="value"
                       nameKey="name"
                       outerRadius={90}
                       isAnimationActive={false}
                     >
-                      {categoryData.map((_, i) => (
+                      {groupData.map((_, i) => (
                         <Cell key={i} fill={COLORS[i % COLORS.length]} />
                       ))}
                     </Pie>

@@ -54,6 +54,10 @@ def _migrate_existing_tables() -> None:
                 conn.execute(
                     text("ALTER TABLE categories ADD COLUMN monthly_budget NUMERIC(12, 2)")
                 )
+            if "group_name" not in cols:
+                conn.execute(
+                    text("ALTER TABLE categories ADD COLUMN group_name VARCHAR(40) DEFAULT ''")
+                )
             # An earlier default taxonomy used "Payments & Credits" for card
             # payments, filed as a plain expense — force it to transfer so
             # already-imported payments retroactively stop counting as
@@ -76,8 +80,87 @@ def _migrate_existing_tables() -> None:
             )
 
 
+# Old default category names -> their replacement in the current taxonomy.
+# Renames happen in place; when the target already exists the two are merged
+# (transactions, keywords, and budget move over, the old row is deleted).
+CATEGORY_RENAMES: dict[str, str] = {
+    "Grocery": "Groceries",
+    "Dine out": "Dining Out",
+    "Dining": "Dining Out",
+    "Gas, Parking": "Gas & Parking",
+    "Fuel & Parking": "Gas & Parking",
+    "House tax, insurance": "Property Tax & Insurance",
+    "Hydro, Water": "Utilities",
+    "Internet & phone": "Internet & Phone",
+    "Telecom & Utilities": "Internet & Phone",
+    "Car installment": "Car Payment",
+    "Kids / Childcare": "Childcare & Kids",
+    "Health": "Health & Wellness",
+    "Misc spending": "Miscellaneous",
+    "Interest & Fees": "Bank Fees & Interest",
+    "Travel & Lodging": "Travel",
+    "Payroll": "Employment Income",
+    "CCB / GST": "Government Benefits",
+    "Payments & Credits": "Credit Card Payment",
+}
+
+
+def _migrate_category_taxonomy() -> None:
+    """Rename/merge categories from earlier default taxonomies into the
+    current one, carrying transactions, keywords, and budgets along.
+    Idempotent: once no old names remain, this is a no-op. User-created
+    categories (names not in the map) are never touched."""
+    from app.models import Category, CategoryKind, CategoryRule, Transaction
+
+    from app.categorize import DEFAULT_RULES
+
+    db = SessionLocal()
+    try:
+        by_name = {c.name: c for c in db.query(Category).all()}
+        for old_name, new_name in CATEGORY_RENAMES.items():
+            old = by_name.get(old_name)
+            if old is None:
+                continue
+            target = by_name.get(new_name)
+            if target is None:
+                # Simple rename; adopt the new taxonomy's kind/group.
+                default = DEFAULT_RULES.get(new_name)
+                old.name = new_name
+                if default is not None:
+                    old.kind = default.kind
+                    old.group_name = default.group
+                by_name[new_name] = old
+                del by_name[old_name]
+            else:
+                # Merge into the existing target, then remove the old row.
+                db.query(Transaction).filter(
+                    Transaction.category_id == old.id
+                ).update({"category_id": target.id})
+                db.query(CategoryRule).filter(
+                    CategoryRule.category_id == old.id
+                ).update({"category_id": target.id})
+                if target.monthly_budget is None and old.monthly_budget is not None:
+                    target.monthly_budget = old.monthly_budget
+                db.delete(old)
+                del by_name[old_name]
+        db.flush()
+
+        # Dedupe keywords that may now collide after merges.
+        seen: set[tuple[int, str]] = set()
+        for rule in db.query(CategoryRule).order_by(CategoryRule.id).all():
+            key = (rule.category_id, rule.keyword)
+            if key in seen:
+                db.delete(rule)
+            else:
+                seen.add(key)
+        db.commit()
+    finally:
+        db.close()
+
+
 def init_db() -> None:
     from app import models  # noqa: F401  (ensure models are registered)
 
     Base.metadata.create_all(bind=engine)
     _migrate_existing_tables()
+    _migrate_category_taxonomy()

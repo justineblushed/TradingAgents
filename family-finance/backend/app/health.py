@@ -25,7 +25,6 @@ INVESTMENT_TYPES = {
     AccountType.rrsp,
     AccountType.resp,
 }
-HOUSING_NAME_HINTS = ("mortgage", "house", "hydro", "water", "rent")
 
 # Metric weights (renormalized over the metrics that have data).
 WEIGHTS = {
@@ -76,8 +75,13 @@ def _recent_complete_months(db: Session, limit: int = 3) -> list[str]:
     return out
 
 
-def _month_flows(db: Session, month: str) -> tuple[float, float, dict[str, float]]:
-    """(spending, income, spending_by_category) for a month, transfers excluded."""
+def _month_flows(
+    db: Session, month: str
+) -> tuple[float, float, dict[str, float], dict[str, float]]:
+    """(spending, income, spending_by_category, spending_by_group) for a month.
+
+    Transfers excluded; refunds net against their expense category — the same
+    rules as the dashboard, so the two never disagree."""
     start = f"{month}-01"
     year, mon = (int(p) for p in month.split("-"))
     end = f"{year + 1:04d}-01-01" if mon == 12 else f"{year:04d}-{mon + 1:02d}-01"
@@ -90,14 +94,22 @@ def _month_flows(db: Session, month: str) -> tuple[float, float, dict[str, float
     rows = [
         r for r in rows if not (r.category and r.category.kind == CategoryKind.transfer)
     ]
-    spending = sum(float(r.amount) for r in rows if r.amount > 0)
-    income = -sum(float(r.amount) for r in rows if r.amount < 0)
+    spending = 0.0
+    income = 0.0
     by_cat: dict[str, float] = {}
+    by_group: dict[str, float] = {}
     for r in rows:
-        if r.amount > 0:
+        amount = float(r.amount)
+        kind = r.category.kind if r.category else None
+        if kind == CategoryKind.expense or (kind is None and amount > 0):
+            spending += amount
             name = r.category.name if r.category else "Uncategorized"
-            by_cat[name] = by_cat.get(name, 0.0) + float(r.amount)
-    return spending, income, by_cat
+            group = (r.category.group_name or "Other") if r.category else "Uncategorized"
+            by_cat[name] = by_cat.get(name, 0.0) + amount
+            by_group[group] = by_group.get(group, 0.0) + amount
+        else:
+            income += -amount
+    return spending, income, by_cat, by_group
 
 
 def compute_health(db: Session) -> dict:
@@ -148,7 +160,7 @@ def compute_health(db: Session) -> dict:
 
     # --- Savings rate ---
     if ref_month and flows[ref_month][1] > 0:
-        spending, income, _ = flows[ref_month]
+        spending, income, _, _ = flows[ref_month]
         rate = (income - spending) / income
         pct = rate * 100
         status = "good" if pct >= 15 else "warn" if pct >= 5 else "bad"
@@ -176,12 +188,8 @@ def compute_health(db: Session) -> dict:
 
     # --- Housing cost ---
     if ref_month and flows[ref_month][1] > 0:
-        _, income, by_cat = flows[ref_month]
-        housing = sum(
-            amount
-            for name, amount in by_cat.items()
-            if any(hint in name.lower() for hint in HOUSING_NAME_HINTS)
-        )
+        _, income, _, by_group = flows[ref_month]
+        housing = by_group.get("Housing", 0.0)
         pct = housing / income * 100
         status = "good" if pct <= 30 else "warn" if pct <= 40 else "bad"
         if pct <= 30:
@@ -196,7 +204,7 @@ def compute_health(db: Session) -> dict:
                 "Housing cost",
                 status,
                 f"{pct:.0f}%",
-                f"Housing (mortgage, taxes, utilities) took {pct:.0f}% of {ref_month} income (guideline: ≤30%).",
+                f"The Housing group took {pct:.0f}% of {ref_month} income (guideline: ≤30%).",
                 score,
             )
         )
@@ -219,7 +227,7 @@ def compute_health(db: Session) -> dict:
         .all()
     )
     if budgeted and ref_month:
-        _, _, by_cat = flows[ref_month]
+        _, _, by_cat, _ = flows[ref_month]
         over_total = 0.0
         budget_total = 0.0
         over_count = 0
@@ -396,7 +404,7 @@ def compute_health(db: Session) -> dict:
     # --- Biggest opportunity ---
     opportunity = None
     if ref_month:
-        _, _, by_cat = flows[ref_month]
+        _, _, by_cat, _ = flows[ref_month]
         budgets = {c.name: float(c.monthly_budget) for c in budgeted}
         # historical average per category over the older months (excluding ref)
         older = months[1:]

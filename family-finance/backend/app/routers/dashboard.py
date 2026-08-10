@@ -33,14 +33,27 @@ def summary(month: str | None = None, db: Session = Depends(get_db)):
     # them entirely rather than letting them inflate either total.
     rows = [r for r in rows if not (r.category and r.category.kind == CategoryKind.transfer)]
 
-    total_income = -sum(float(r.amount) for r in rows if r.amount < 0)
-    total_spending = sum(float(r.amount) for r in rows if r.amount > 0)
-
+    # Spending is the NET of expense-kind transactions: a merchant refund
+    # filed under Groceries offsets Groceries rather than counting as income.
+    # Income is the net of income-kind transactions. Uncategorized rows fall
+    # back to sign: positive = spending, negative = income.
+    total_spending = 0.0
+    total_income = 0.0
     by_category: dict[str, float] = defaultdict(float)
+    by_group: dict[str, float] = defaultdict(float)
+
     for r in rows:
-        if r.amount > 0:
+        amount = float(r.amount)
+        kind = r.category.kind if r.category else None
+        is_spending = kind == CategoryKind.expense or (kind is None and amount > 0)
+        if is_spending:
+            total_spending += amount
             name = r.category.name if r.category else "Uncategorized"
-            by_category[name] += float(r.amount)
+            group = (r.category.group_name or "Other") if r.category else "Uncategorized"
+            by_category[name] += amount
+            by_group[group] += amount
+        else:
+            total_income += -amount
 
     return DashboardSummary(
         month=month,
@@ -48,6 +61,7 @@ def summary(month: str | None = None, db: Session = Depends(get_db)):
         total_income=total_income,
         net_cash_flow=total_income - total_spending,
         by_category=dict(by_category),
+        by_group=dict(by_group),
     )
 
 

@@ -45,6 +45,7 @@ class CategoryOut(BaseModel):
     kind: str = "expense"
     keywords: list[str] = []
     monthly_budget: float | None = None
+    group_name: str = ""
 
     class Config:
         from_attributes = True
@@ -57,6 +58,7 @@ class CategoryBudgetUpdate(BaseModel):
 class CategoryCreate(BaseModel):
     name: str
     kind: str = "expense"
+    group_name: str = ""
 
 
 class CategoryKeywordsUpdate(BaseModel):
@@ -150,10 +152,12 @@ class CoverageSummary(BaseModel):
 class DashboardSummary(BaseModel):
     """Household cash flow for the month. Transfers between the family's own
     accounts (e.g. paying off a credit card from chequing) are excluded from
-    both totals — see CategoryKind.transfer."""
+    both totals — see CategoryKind.transfer. Merchant refunds in an expense
+    category offset that category (net), they are not income."""
 
     month: str
     total_spending: float
     total_income: float
     net_cash_flow: float
     by_category: dict[str, float]
+    by_group: dict[str, float]

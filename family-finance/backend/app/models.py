@@ -99,6 +99,9 @@ class Category(Base):
     # Optional monthly spending target; drives the "within budget" health
     # metric and the biggest-opportunity insight. Null = no target set.
     monthly_budget: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
+    # Roll-up group for dashboard reading ("Housing", "Food", ...). Empty for
+    # user-created categories that haven't been grouped.
+    group_name: Mapped[str] = mapped_column(String(40), default="")
 
     rules: Mapped[list["CategoryRule"]] = relationship(back_populates="category")
 

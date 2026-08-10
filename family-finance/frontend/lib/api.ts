@@ -53,6 +53,7 @@ export type DashboardSummary = {
   total_income: number;
   net_cash_flow: number;
   by_category: Record<string, number>;
+  by_group: Record<string, number>;
 };
 
 export type CreditCardSummary = {
@@ -116,7 +117,18 @@ export type Category = {
   kind: CategoryKind;
   keywords: string[];
   monthly_budget: number | null;
+  group_name: string;
 };
+
+export const GROUP_ORDER = [
+  "Housing",
+  "Transportation",
+  "Food",
+  "Family",
+  "Lifestyle",
+  "Travel",
+  "Financial",
+] as const;
 
 export type HealthMetric = {
   key: string;
@@ -281,13 +293,14 @@ export async function listCategories(): Promise<Category[]> {
 
 export async function createCategory(
   name: string,
-  kind: CategoryKind = "expense"
+  kind: CategoryKind = "expense",
+  groupName = ""
 ): Promise<Category> {
   return asJson(
     await fetch(`${API_BASE}/categories`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, kind }),
+      body: JSON.stringify({ name, kind, group_name: groupName }),
     })
   );
 }

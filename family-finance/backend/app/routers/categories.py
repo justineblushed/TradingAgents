@@ -25,6 +25,7 @@ def _to_out(category: Category) -> CategoryOut:
         monthly_budget=(
             float(category.monthly_budget) if category.monthly_budget is not None else None
         ),
+        group_name=category.group_name or "",
     )
 
 
@@ -44,7 +45,9 @@ def create_category(payload: CategoryCreate, db: Session = Depends(get_db)):
         raise HTTPException(409, "A category with this name already exists")
     if payload.kind not in _VALID_KINDS:
         raise HTTPException(400, f"kind must be one of {sorted(_VALID_KINDS)}")
-    category = Category(name=name, kind=CategoryKind(payload.kind))
+    category = Category(
+        name=name, kind=CategoryKind(payload.kind), group_name=payload.group_name.strip()
+    )
     db.add(category)
     db.commit()
     db.refresh(category)
