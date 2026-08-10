@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Category,
   Transaction,
@@ -16,7 +17,20 @@ function currentMonth(): string {
 }
 
 export default function TransactionsPage() {
-  const [month, setMonth] = useState(currentMonth());
+  // useSearchParams needs a Suspense boundary for static prerendering.
+  return (
+    <Suspense fallback={<p className="py-16 text-center text-sm text-slate-400">Loading…</p>}>
+      <TransactionsInner />
+    </Suspense>
+  );
+}
+
+function TransactionsInner() {
+  const searchParams = useSearchParams();
+  const initialMonth = /^\d{4}-\d{2}$/.test(searchParams.get("month") ?? "")
+    ? (searchParams.get("month") as string)
+    : currentMonth();
+  const [month, setMonth] = useState(initialMonth);
   const [transactions, setTransactions] = useState<Transaction[] | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [error, setError] = useState<string | null>(null);

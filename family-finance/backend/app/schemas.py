@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 
 from pydantic import BaseModel
 
@@ -22,6 +22,9 @@ class ImportRequest(BaseModel):
     account_id: int
     period_label: str = ""
     transactions: list[ParsedTransaction]
+    # "block": refuse with a 409 if any transaction already exists (default);
+    # "skip": import only the new ones; "import": import everything anyway.
+    on_duplicate: str = "block"
 
 
 class TransactionOut(BaseModel):
@@ -122,6 +125,7 @@ class MonthCoverage(BaseModel):
     month: str  # "2026-07"
     transaction_count: int
     covered: bool
+    skipped: bool = False
 
 
 class AccountCoverage(BaseModel):
@@ -129,6 +133,8 @@ class AccountCoverage(BaseModel):
     account_name: str
     months: list[MonthCoverage]
     missing_months: list[str]
+    last_imported_at: datetime | None = None
+    days_since_last_import: int | None = None
 
 
 class CoverageSummary(BaseModel):

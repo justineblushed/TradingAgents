@@ -24,6 +24,10 @@ export default function UploadPage() {
   const [warnings, setWarnings] = useState<string[]>([]);
   const [phase, setPhase] = useState<"idle" | "parsing" | "importing">("idle");
   const [message, setMessage] = useState<string | null>(null);
+  const [duplicateInfo, setDuplicateInfo] = useState<{
+    duplicates: number;
+    total: number;
+  } | null>(null);
   const [showAddAccount, setShowAddAccount] = useState(false);
   const busy = phase !== "idle";
   // With zero accounts there's nothing to pick from, so skip the dropdown
@@ -66,9 +70,14 @@ export default function UploadPage() {
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
+    // Reset the input so picking the same file again still fires onChange
+    // (browsers suppress it when the value hasn't changed — without this,
+    // re-uploading the same statement after an import does nothing).
+    e.target.value = "";
     if (!file) return;
     setPhase("parsing");
     setMessage(null);
+    setDuplicateInfo(null);
     try {
       const preview = await previewStatement(file, statementYear);
       setTransactions(preview.transactions);
@@ -88,14 +97,29 @@ export default function UploadPage() {
     );
   }
 
-  async function handleConfirm() {
+  async function handleConfirm(onDuplicate: "block" | "skip" | "import" = "block") {
     if (!accountId || !transactions) return;
     setPhase("importing");
     setMessage(null);
+    if (onDuplicate !== "block") setDuplicateInfo(null);
     try {
-      const result = await confirmStatement(accountId, periodLabel, transactions);
-      setMessage(`Imported ${result.imported} transactions.`);
-      setTransactions(null);
+      const result = await confirmStatement(
+        accountId,
+        periodLabel,
+        transactions,
+        onDuplicate
+      );
+      if (result.status === "duplicates") {
+        setDuplicateInfo({ duplicates: result.duplicates, total: result.total });
+      } else {
+        setDuplicateInfo(null);
+        setMessage(
+          result.skipped_duplicates > 0
+            ? `Imported ${result.imported} new transactions (skipped ${result.skipped_duplicates} duplicates).`
+            : `Imported ${result.imported} transactions.`
+        );
+        setTransactions(null);
+      }
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Failed to import");
     } finally {
@@ -310,13 +334,46 @@ export default function UploadPage() {
             </table>
           </div>
 
-          <button
-            onClick={handleConfirm}
-            disabled={busy}
-            className="mt-4 rounded-md bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50"
-          >
-            Confirm &amp; Import
-          </button>
+          {duplicateInfo ? (
+            <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+              <p className="font-medium">
+                {duplicateInfo.duplicates} of {duplicateInfo.total} transactions
+                already exist for this account (same date, description, and
+                amount) — this looks like a re-uploaded statement.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  onClick={() => handleConfirm("skip")}
+                  disabled={busy}
+                  className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50"
+                >
+                  Skip duplicates, import the rest
+                </button>
+                <button
+                  onClick={() => handleConfirm("import")}
+                  disabled={busy}
+                  className="rounded-md border border-amber-300 bg-white px-3 py-1.5 text-sm font-medium text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+                >
+                  Import anyway (keep duplicates)
+                </button>
+                <button
+                  onClick={() => setDuplicateInfo(null)}
+                  disabled={busy}
+                  className="px-3 py-1.5 text-sm text-slate-500 hover:text-slate-700"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => handleConfirm()}
+              disabled={busy}
+              className="mt-4 rounded-md bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50"
+            >
+              Confirm &amp; Import
+            </button>
+          )}
         </div>
       )}
     </div>

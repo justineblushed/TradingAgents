@@ -91,6 +91,7 @@ export type MonthCoverage = {
   month: string;
   transaction_count: number;
   covered: boolean;
+  skipped: boolean;
 };
 
 export type AccountCoverage = {
@@ -98,6 +99,8 @@ export type AccountCoverage = {
   account_name: string;
   months: MonthCoverage[];
   missing_months: string[];
+  last_imported_at: string | null;
+  days_since_last_import: number | null;
 };
 
 export type CoverageSummary = {
@@ -171,6 +174,25 @@ export async function getStatementCoverage(): Promise<CoverageSummary> {
   return asJson(await fetch(`${API_BASE}/coverage/statements`));
 }
 
+export async function skipCoverageMonth(accountId: number, month: string): Promise<void> {
+  await asJson(
+    await fetch(`${API_BASE}/coverage/skip`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ account_id: accountId, month }),
+    })
+  );
+}
+
+export async function unskipCoverageMonth(accountId: number, month: string): Promise<void> {
+  await asJson(
+    await fetch(
+      `${API_BASE}/coverage/skip?account_id=${accountId}&month=${encodeURIComponent(month)}`,
+      { method: "DELETE" }
+    )
+  );
+}
+
 export async function previewStatement(
   file: File,
   statementYear: number
@@ -186,22 +208,36 @@ export async function previewStatement(
   );
 }
 
+export type ConfirmResult =
+  | { status: "ok"; imported: number; skipped_duplicates: number }
+  | { status: "duplicates"; duplicates: number; total: number };
+
 export async function confirmStatement(
   accountId: number,
   periodLabel: string,
-  transactions: ParsedTransaction[]
-): Promise<{ statement_id: number; imported: number }> {
-  return asJson(
-    await fetch(`${API_BASE}/statements/confirm`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        account_id: accountId,
-        period_label: periodLabel,
-        transactions,
-      }),
-    })
-  );
+  transactions: ParsedTransaction[],
+  onDuplicate: "block" | "skip" | "import" = "block"
+): Promise<ConfirmResult> {
+  const res = await fetch(`${API_BASE}/statements/confirm`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      account_id: accountId,
+      period_label: periodLabel,
+      transactions,
+      on_duplicate: onDuplicate,
+    }),
+  });
+  if (res.status === 409) {
+    const body = await res.json();
+    return {
+      status: "duplicates",
+      duplicates: body.detail.duplicates,
+      total: body.detail.total,
+    };
+  }
+  const body = await asJson<{ imported: number; skipped_duplicates: number }>(res);
+  return { status: "ok", ...body };
 }
 
 export async function getDashboardSummary(month?: string): Promise<DashboardSummary> {

@@ -112,6 +112,18 @@ class CategoryRule(Base):
     category: Mapped["Category"] = relationship(back_populates="rules")
 
 
+class CoverageSkip(Base):
+    """A month the user marked as N/A for an account — no statement exists
+    (card unused that month, account opened mid-year, etc.), so the
+    statement checklist shouldn't keep flagging it as missing."""
+
+    __tablename__ = "coverage_skips"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id"))
+    month: Mapped[str] = mapped_column(String(7))  # "2026-05"
+
+
 class Statement(Base):
     """One imported statement file (metadata only — the source PDF is never stored)."""
 
