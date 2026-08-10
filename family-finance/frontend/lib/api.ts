@@ -146,15 +146,24 @@ export type CostTypeSlice = {
   percent: number;
 };
 
-export type CutCandidate = {
+export type BudgetVariance = {
+  category: string;
+  budget: number;
+  spent: number;
+  over: number;
+};
+
+export type AreaToWatch = {
   category: string;
   group_name: string;
   cost_type: CostType;
   controllability: Controllability;
   spent: number;
-  reference: number;
-  over: number;
-  basis: string;
+  typical: number;
+  above_typical: number;
+  percent_above: number;
+  months_of_history: number;
+  highlight: boolean;
 };
 
 export type SpendingControl = {
@@ -162,8 +171,19 @@ export type SpendingControl = {
   total_spending: number;
   by_cost_type: CostTypeSlice[];
   locked_amount: number;
-  cut_candidates: CutCandidate[];
-  potential_savings: number;
+  over_budget_total: number;
+  budget_variances: BudgetVariance[];
+  areas_to_watch: AreaToWatch[];
+  adjustable_low: number | null;
+  adjustable_high: number | null;
+  adjustable_months_of_history: number;
+};
+
+export type Tag = {
+  id: number;
+  name: string;
+  transaction_count: number;
+  total_spent: number;
 };
 
 export const GROUP_ORDER = [
@@ -207,6 +227,7 @@ export type Transaction = {
   description: string;
   amount: number;
   category: string | null;
+  tags: string[];
 };
 
 async function asJson<T>(res: Response): Promise<T> {
@@ -406,9 +427,36 @@ export async function getHealthScore(): Promise<HealthScore> {
   return asJson(await fetch(`${API_BASE}/health-score`));
 }
 
-export async function listTransactions(month?: string): Promise<Transaction[]> {
-  const qs = month ? `?month=${month}` : "";
+export async function listTransactions(
+  month?: string,
+  tag?: string
+): Promise<Transaction[]> {
+  const params = new URLSearchParams();
+  if (month) params.set("month", month);
+  if (tag) params.set("tag", tag);
+  const qs = params.toString() ? `?${params.toString()}` : "";
   return asJson(await fetch(`${API_BASE}/transactions${qs}`));
+}
+
+export async function listTags(): Promise<Tag[]> {
+  return asJson(await fetch(`${API_BASE}/tags`));
+}
+
+export async function deleteTag(tagId: number): Promise<void> {
+  await asJson(await fetch(`${API_BASE}/tags/${tagId}`, { method: "DELETE" }));
+}
+
+export async function setTransactionTags(
+  transactionId: number,
+  tags: string[]
+): Promise<Transaction> {
+  return asJson(
+    await fetch(`${API_BASE}/transactions/${transactionId}/tags`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tags }),
+    })
+  );
 }
 
 export async function setTransactionCategory(

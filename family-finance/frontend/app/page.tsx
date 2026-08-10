@@ -16,11 +16,11 @@ import {
 } from "recharts";
 import Link from "next/link";
 import {
+  AreaToWatch,
   CONTROL_LABELS,
   Controllability,
   CoverageSummary,
   CreditCardSummary,
-  CutCandidate,
   DashboardSummary,
   SpendingControl,
   getCreditCardSummaries,
@@ -273,68 +273,100 @@ function SpendingControlPanel({ control }: { control: SpendingControl }) {
         </p>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-sm font-medium text-slate-600">Where can you cut?</h2>
-          {control.potential_savings > 0 && (
-            <p className="text-sm text-slate-500">
-              Potential savings:{" "}
-              <span className="font-semibold text-green-700">
-                ~{formatCurrency(control.potential_savings)}
-              </span>
+      {control.budget_variances.length > 0 && (
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="text-sm font-medium text-slate-600">Over budget</h2>
+            <p className="text-sm font-semibold text-red-600">
+              {formatCurrency(control.over_budget_total)} over budget
             </p>
-          )}
-        </div>
-
-        {control.cut_candidates.length === 0 ? (
-          <p className="py-6 text-center text-sm text-slate-400">
-            Nothing over its target this month. Set monthly targets on the
-            Categories page to sharpen this.
-          </p>
-        ) : (
+          </div>
           <div className="divide-y divide-slate-100">
-            {control.cut_candidates.map((c) => (
-              <CutRow key={c.category} candidate={c} />
+            {control.budget_variances.map((b) => (
+              <div
+                key={b.category}
+                className="flex items-center justify-between py-2 text-sm first:pt-0 last:pb-0"
+              >
+                <span className="text-slate-700">{b.category}</span>
+                <span className="text-slate-400">
+                  {formatCurrency(b.spent)} vs {formatCurrency(b.budget)}{" "}
+                  <span className="font-medium text-red-600">
+                    +{formatCurrency(b.over)}
+                  </span>
+                </span>
+              </div>
             ))}
           </div>
-        )}
+          <p className="mt-3 text-xs text-slate-400">
+            This is budget variance — what already happened. It is not money
+            that reappears next month.
+          </p>
+        </div>
+      )}
 
-        <p className="mt-3 text-xs text-slate-400">
-          Potential savings counts only high-control categories — an irregular
-          car repair is over budget too, but it isn't money you can choose to
-          keep.
-        </p>
-      </div>
+      {control.areas_to_watch.length > 0 && (
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <h2 className="mb-3 text-sm font-medium text-slate-600">Areas to watch</h2>
+          <div className="divide-y divide-slate-100">
+            {control.areas_to_watch.map((a) => (
+              <WatchRow key={a.category} area={a} />
+            ))}
+          </div>
+          <p className="mt-3 text-xs text-slate-400">
+            Compared against each category&apos;s own recent months, not a
+            target — this is what flags something genuinely unusual.
+          </p>
+        </div>
+      )}
+
+      {control.adjustable_low !== null && control.adjustable_high !== null && (
+        <div className="rounded-xl border border-brand-100 bg-brand-50 p-4 shadow-sm">
+          <p className="text-xs font-medium uppercase tracking-widest text-brand-700">
+            Adjustable spending
+          </p>
+          <p className="mt-1 text-2xl font-bold text-brand-700">
+            ~{formatCurrency(control.adjustable_low)} –{" "}
+            {formatCurrency(control.adjustable_high)}
+          </p>
+          <p className="mt-2 text-xs text-slate-500">
+            An estimate, not a promise. The lower bound is what returning to
+            your own typical spending would free up; the upper bound is
+            matching your best month in the last{" "}
+            {control.adjustable_months_of_history} — both are levels this
+            household has actually hit before. Only variable and recurring
+            categories you rated high-control are counted.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
 
-function CutRow({ candidate }: { candidate: CutCandidate }) {
+function WatchRow({ area }: { area: AreaToWatch }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 py-2 first:pt-0 last:pb-0">
       <div className="flex items-center gap-2">
-        <span>{CONTROL_DOT[candidate.controllability]}</span>
+        <span>{CONTROL_DOT[area.controllability]}</span>
         <div>
-          <p className="text-sm font-medium text-slate-700">{candidate.category}</p>
+          <p className="text-sm font-medium text-slate-700">{area.category}</p>
           <p className="text-xs text-slate-400">
-            {candidate.basis === "budget" ? "Budget" : "Typical"}{" "}
-            {formatCurrency(candidate.reference)} →{" "}
-            <span className="text-red-600">
-              +{formatCurrency(candidate.over)} over
-            </span>
+            {formatCurrency(area.spent)} this month · typical ~
+            {formatCurrency(area.typical)}
           </p>
         </div>
       </div>
       <div className="flex items-center gap-2">
-        <span
-          className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-            CONTROL_BADGE[candidate.controllability]
-          }`}
-        >
-          {CONTROL_LABELS[candidate.controllability]} control
-        </span>
-        <span className="w-20 text-right text-sm font-semibold text-slate-800">
-          {formatCurrency(candidate.spent)}
+        {area.highlight && (
+          <span
+            className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+              CONTROL_BADGE[area.controllability]
+            }`}
+          >
+            {CONTROL_LABELS[area.controllability]} control
+          </span>
+        )}
+        <span className="w-24 text-right text-sm font-semibold text-amber-700">
+          ↑ {area.percent_above}% above
         </span>
       </div>
     </div>

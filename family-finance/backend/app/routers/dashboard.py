@@ -18,9 +18,10 @@ from app.models import (
 )
 from app.networth import balance_for_account
 from app.schemas import (
+    AreaToWatch,
+    BudgetVariance,
     CostTypeSlice,
     CreditCardSummary,
-    CutCandidate,
     DashboardSummary,
     SpendingControl,
 )
@@ -87,9 +88,13 @@ _COST_TYPE_LABELS = {
     CostType.irregular: "Irregular",
 }
 _COST_TYPE_ORDER = [CostType.fixed, CostType.recurring, CostType.variable, CostType.irregular]
-# Only these are counted toward "potential savings" — a variable-but-unavoidable
-# cost (car repair, medical) shouldn't be presented as money you can choose to keep.
-_CUTTABLE = {Controllability.high, Controllability.very_high}
+# Only spending that both moves month to month AND is realistically within the
+# household's control can contribute to the adjustable estimate. A car repair is
+# variable but not a choice; a mortgage is neither.
+_ADJUSTABLE_COST_TYPES = {CostType.variable, CostType.recurring}
+_ADJUSTABLE_CONTROL = {Controllability.high, Controllability.very_high}
+# Below this, "typical" is an average of too few months to mean anything.
+_MIN_HISTORY_MONTHS = 2
 
 
 @router.get("/spending-control", response_model=SpendingControl)
@@ -136,60 +141,90 @@ def spending_control(month: str | None = None, db: Session = Depends(get_db)):
     ]
     locked_amount = by_cost.get(CostType.fixed, 0.0) + by_cost.get(CostType.irregular, 0.0)
 
-    # Historical baseline for categories with no explicit budget: their
-    # average in the complete months before this one.
+    # Each category's own recent history — the honest baseline for "is this
+    # month unusual?". Excludes the month being viewed.
     history_months = [m for m in recent_complete_months(db, limit=4) if m < month][:3]
     history: dict[str, list[float]] = defaultdict(list)
     for m in history_months:
         for name, amount in month_flows(db, m)[2].items():
             history[name].append(amount)
 
-    candidates: list[CutCandidate] = []
-    potential_savings = 0.0
+    budget_variances: list[BudgetVariance] = []
+    over_budget_total = 0.0
+    areas: list[AreaToWatch] = []
+    adjustable_low = 0.0
+    adjustable_high = 0.0
+    have_adjustable = False
+
     for category in db.query(Category).filter(Category.kind == CategoryKind.expense).all():
         spent = spent_by_category.get(category.name, 0.0)
         if spent <= 0:
             continue
+
+        # 1. Budget variance — a plain fact about this month vs. the target.
         if category.monthly_budget is not None:
-            reference, basis = float(category.monthly_budget), "budget"
-        elif history.get(category.name):
-            values = history[category.name]
-            reference, basis = sum(values) / len(values), "typical spending"
-        else:
+            budget = float(category.monthly_budget)
+            if spent > budget:
+                over = spent - budget
+                over_budget_total += over
+                budget_variances.append(
+                    BudgetVariance(
+                        category=category.name,
+                        budget=round(budget, 2),
+                        spent=round(spent, 2),
+                        over=round(over, 2),
+                    )
+                )
+
+        # 2. Areas to watch — high against this category's own normal.
+        values = history.get(category.name, [])
+        if len(values) < _MIN_HISTORY_MONTHS:
             continue
-        over = spent - reference
-        if over <= 0:
+        typical = sum(values) / len(values)
+        above = spent - typical
+        if above <= 0 or typical <= 0:
             continue
-        candidates.append(
-            CutCandidate(
+        adjustable = (
+            category.cost_type in _ADJUSTABLE_COST_TYPES
+            and category.controllability in _ADJUSTABLE_CONTROL
+        )
+        areas.append(
+            AreaToWatch(
                 category=category.name,
                 group_name=category.group_name or "",
                 cost_type=category.cost_type.value,
                 controllability=category.controllability.value,
                 spent=round(spent, 2),
-                reference=round(reference, 2),
-                over=round(over, 2),
-                basis=basis,
+                typical=round(typical, 2),
+                above_typical=round(above, 2),
+                percent_above=round(above / typical * 100, 0),
+                months_of_history=len(values),
+                highlight=adjustable,
             )
         )
-        if category.controllability in _CUTTABLE:
-            potential_savings += over
 
-    control_rank = {
-        Controllability.very_high.value: 0,
-        Controllability.high.value: 1,
-        Controllability.medium.value: 2,
-        Controllability.low.value: 3,
-    }
-    candidates.sort(key=lambda c: (control_rank.get(c.controllability, 9), -c.over))
+        # 3. Adjustable range, bounded by what this household has actually
+        # done before: low = back to its own typical, high = match its best
+        # recent month. Never an open-ended promise.
+        if adjustable:
+            have_adjustable = True
+            adjustable_low += above
+            adjustable_high += spent - min(values)
+
+    budget_variances.sort(key=lambda b: -b.over)
+    areas.sort(key=lambda a: -a.above_typical)
 
     return SpendingControl(
         month=month,
         total_spending=round(total_spending, 2),
         by_cost_type=slices,
         locked_amount=round(locked_amount, 2),
-        cut_candidates=candidates,
-        potential_savings=round(potential_savings, 2),
+        over_budget_total=round(over_budget_total, 2),
+        budget_variances=budget_variances,
+        areas_to_watch=areas,
+        adjustable_low=round(adjustable_low, 2) if have_adjustable else None,
+        adjustable_high=round(adjustable_high, 2) if have_adjustable else None,
+        adjustable_months_of_history=len(history_months),
     )
 
 

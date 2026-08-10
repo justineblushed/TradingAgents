@@ -34,9 +34,28 @@ class TransactionOut(BaseModel):
     description: str
     amount: float
     category: str | None = None
+    tags: list[str] = []
 
     class Config:
         from_attributes = True
+
+
+class TagOut(BaseModel):
+    id: int
+    name: str
+    transaction_count: int = 0
+    total_spent: float = 0.0
+
+    class Config:
+        from_attributes = True
+
+
+class TagCreate(BaseModel):
+    name: str
+
+
+class TransactionTagsUpdate(BaseModel):
+    tags: list[str]
 
 
 class CategoryOut(BaseModel):
@@ -69,33 +88,61 @@ class CostTypeSlice(BaseModel):
     percent: float
 
 
-class CutCandidate(BaseModel):
+class BudgetVariance(BaseModel):
+    """Pure fact: spent vs. the budget the user set. Not a saving."""
+
+    category: str
+    budget: float
+    spent: float
+    over: float
+
+
+class AreaToWatch(BaseModel):
+    """Spending unusually high against this category's own recent history."""
+
     category: str
     group_name: str
     cost_type: str
     controllability: str
     spent: float
-    reference: float  # budget, or typical spending when no budget is set
-    over: float
-    basis: str  # "budget" | "typical spending"
+    typical: float
+    above_typical: float
+    percent_above: float
+    months_of_history: int
+    # variable/recurring AND high control — the ones actually worth acting on
+    highlight: bool
 
 
 class SpendingControl(BaseModel):
     """How much of the month's spending is actually adjustable.
 
-    Splits spending by cost type, then ranks the categories that are both
-    over their reference AND realistically controllable. Potential savings
-    counts only high/very-high controllability overages — an $800 car
-    repair is variable but not a choice, and promising it as "savings"
-    would make the number a lie.
+    Deliberately keeps three ideas separate rather than collapsing them
+    into one headline "savings" number:
+
+    1. budget variance — how far over the set budget, a fact about the
+       past, not money that will reappear next month;
+    2. areas to watch — spending high against the category's OWN recent
+       typical, which is what actually signals something unusual;
+    3. adjustable range — a bounded estimate, low = getting back to
+       typical, high = matching the best recent month. Both bounds come
+       from months the household actually achieved, and only
+       variable/recurring + high-control categories count. Suppressed
+       entirely with under two months of history rather than guessing.
     """
 
     month: str
     total_spending: float
     by_cost_type: list[CostTypeSlice]
     locked_amount: float  # fixed + irregular: little room to adjust
-    cut_candidates: list[CutCandidate]
-    potential_savings: float
+
+    over_budget_total: float
+    budget_variances: list[BudgetVariance]
+
+    areas_to_watch: list[AreaToWatch]
+
+    adjustable_low: float | None = None
+    adjustable_high: float | None = None
+    adjustable_months_of_history: int = 0
 
 
 class CategoryCreate(BaseModel):

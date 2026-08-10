@@ -1,10 +1,30 @@
 import enum
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, Enum, ForeignKey, Numeric, String, Text
+from sqlalchemy import (
+    Column,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Numeric,
+    String,
+    Table,
+    Text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
+
+# Tags are a dimension orthogonal to categories: a Chicago trip's groceries
+# stay Groceries and its gas stays Gas & Parking, while the tag answers
+# "what did the whole trip cost?" — no Travel Food / Travel Gas categories.
+transaction_tags = Table(
+    "transaction_tags",
+    Base.metadata,
+    Column("transaction_id", ForeignKey("transactions.id"), primary_key=True),
+    Column("tag_id", ForeignKey("tags.id"), primary_key=True),
+)
 
 
 class AccountType(str, enum.Enum):
@@ -149,6 +169,19 @@ class CategoryRule(Base):
     category: Mapped["Category"] = relationship(back_populates="rules")
 
 
+class Tag(Base):
+    """A free-form label across transactions — a trip, a project, a renovation."""
+
+    __tablename__ = "tags"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(60), unique=True)
+
+    transactions: Mapped[list["Transaction"]] = relationship(
+        secondary=transaction_tags, back_populates="tags"
+    )
+
+
 class CoverageSkip(Base):
     """A month the user marked as N/A for an account — no statement exists
     (card unused that month, account opened mid-year, etc.), so the
@@ -195,3 +228,6 @@ class Transaction(Base):
 
     account: Mapped["Account"] = relationship(back_populates="transactions")
     category: Mapped["Category | None"] = relationship()
+    tags: Mapped[list["Tag"]] = relationship(
+        secondary=transaction_tags, back_populates="transactions"
+    )
