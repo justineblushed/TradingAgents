@@ -44,9 +44,14 @@ class CategoryOut(BaseModel):
     name: str
     kind: str = "expense"
     keywords: list[str] = []
+    monthly_budget: float | None = None
 
     class Config:
         from_attributes = True
+
+
+class CategoryBudgetUpdate(BaseModel):
+    monthly_budget: float | None = None
 
 
 class CategoryCreate(BaseModel):

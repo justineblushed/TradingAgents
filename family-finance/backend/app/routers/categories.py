@@ -4,7 +4,12 @@ from sqlalchemy.orm import Session
 from app.categorize import seed_default_categories
 from app.db import get_db
 from app.models import Category, CategoryKind, CategoryRule, Transaction
-from app.schemas import CategoryCreate, CategoryKeywordsUpdate, CategoryOut
+from app.schemas import (
+    CategoryBudgetUpdate,
+    CategoryCreate,
+    CategoryKeywordsUpdate,
+    CategoryOut,
+)
 
 router = APIRouter(prefix="/categories", tags=["categories"])
 
@@ -17,6 +22,9 @@ def _to_out(category: Category) -> CategoryOut:
         name=category.name,
         kind=category.kind.value if hasattr(category.kind, "value") else category.kind,
         keywords=[r.keyword for r in category.rules],
+        monthly_budget=(
+            float(category.monthly_budget) if category.monthly_budget is not None else None
+        ),
     )
 
 
@@ -57,6 +65,21 @@ def set_keywords(
         if keyword and keyword not in seen:
             seen.add(keyword)
             db.add(CategoryRule(keyword=keyword, category_id=category_id))
+    db.commit()
+    db.refresh(category)
+    return _to_out(category)
+
+
+@router.put("/{category_id}/budget", response_model=CategoryOut)
+def set_budget(
+    category_id: int, payload: CategoryBudgetUpdate, db: Session = Depends(get_db)
+):
+    category = db.get(Category, category_id)
+    if category is None:
+        raise HTTPException(404, "Category not found")
+    if payload.monthly_budget is not None and payload.monthly_budget < 0:
+        raise HTTPException(400, "Budget cannot be negative")
+    category.monthly_budget = payload.monthly_budget
     db.commit()
     db.refresh(category)
     return _to_out(category)

@@ -7,6 +7,7 @@ import {
   createCategory,
   deleteCategory,
   listCategories,
+  updateCategoryBudget,
   updateCategoryKeywords,
 } from "@/lib/api";
 
@@ -68,6 +69,18 @@ export default function CategoriesPage() {
       setMessage(err instanceof Error ? err.message : "Failed to save keywords");
     } finally {
       setSavingId(null);
+    }
+  }
+
+  async function handleSaveBudget(category: Category, budget: number | null) {
+    setMessage(null);
+    try {
+      const updated = await updateCategoryBudget(category.id, budget);
+      setCategories((prev) =>
+        prev ? prev.map((c) => (c.id === category.id ? updated : c)) : prev
+      );
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Failed to save budget");
     }
   }
 
@@ -145,6 +158,8 @@ export default function CategoriesPage() {
             savingId={savingId}
             onSave={handleSaveKeywords}
             onDelete={handleDelete}
+            showBudget
+            onSaveBudget={handleSaveBudget}
           />
           <CategoryGroup
             title="Income categories"
@@ -178,6 +193,8 @@ function CategoryGroup({
   savingId,
   onSave,
   onDelete,
+  showBudget,
+  onSaveBudget,
 }: {
   title: string;
   categories: Category[];
@@ -186,6 +203,8 @@ function CategoryGroup({
   savingId: number | null;
   onSave: (c: Category) => void;
   onDelete: (c: Category) => void;
+  showBudget?: boolean;
+  onSaveBudget?: (c: Category, budget: number | null) => void;
 }) {
   if (categories.length === 0) return null;
   return (
@@ -208,6 +227,9 @@ function CategoryGroup({
                 placeholder="keywords, comma-separated (matches transaction description)"
                 className="min-w-[240px] flex-1 rounded-md border border-slate-300 px-2 py-1 text-xs"
               />
+              {showBudget && onSaveBudget && (
+                <BudgetInput category={c} onSave={onSaveBudget} />
+              )}
               {dirty && (
                 <button
                   onClick={() => onSave(c)}
@@ -228,5 +250,44 @@ function CategoryGroup({
         })}
       </div>
     </div>
+  );
+}
+
+function BudgetInput({
+  category,
+  onSave,
+}: {
+  category: Category;
+  onSave: (c: Category, budget: number | null) => void;
+}) {
+  const [draft, setDraft] = useState(
+    category.monthly_budget !== null ? String(category.monthly_budget) : ""
+  );
+  const saved = category.monthly_budget !== null ? String(category.monthly_budget) : "";
+  const dirty = draft !== saved;
+
+  return (
+    <span className="flex items-center gap-1 text-xs text-slate-500">
+      <label title="Monthly spending target — drives the health score's budget metric">
+        Target $
+      </label>
+      <input
+        type="number"
+        min="0"
+        step="10"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        placeholder="—"
+        className="w-20 rounded-md border border-slate-300 px-1.5 py-1 text-xs"
+      />
+      {dirty && (
+        <button
+          onClick={() => onSave(category, draft === "" ? null : Number(draft))}
+          className="rounded-md bg-brand-500 px-2 py-1 text-xs font-medium text-white hover:bg-brand-600"
+        >
+          Set
+        </button>
+      )}
+    </span>
   );
 }

@@ -50,6 +50,10 @@ def _migrate_existing_tables() -> None:
                 # column itself is gone. (Needs SQLite 3.35+ for DROP COLUMN
                 # — universal on any Python 3.9+ install.)
                 conn.execute(text("ALTER TABLE categories DROP COLUMN is_income"))
+            if "monthly_budget" not in cols:
+                conn.execute(
+                    text("ALTER TABLE categories ADD COLUMN monthly_budget NUMERIC(12, 2)")
+                )
             # An earlier default taxonomy used "Payments & Credits" for card
             # payments, filed as a plain expense — force it to transfer so
             # already-imported payments retroactively stop counting as

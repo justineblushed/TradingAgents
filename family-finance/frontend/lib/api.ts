@@ -115,6 +115,31 @@ export type Category = {
   name: string;
   kind: CategoryKind;
   keywords: string[];
+  monthly_budget: number | null;
+};
+
+export type HealthMetric = {
+  key: string;
+  label: string;
+  status: "good" | "warn" | "bad" | "none";
+  display_value: string;
+  detail: string;
+};
+
+export type HealthOpportunity = {
+  category: string;
+  over_amount: number;
+  annual_saving: number;
+  basis: string;
+  month: string;
+};
+
+export type HealthScore = {
+  score: number | null;
+  band: string;
+  reference_month: string | null;
+  metrics: HealthMetric[];
+  opportunity: HealthOpportunity | null;
 };
 
 export type Transaction = {
@@ -284,6 +309,23 @@ export async function deleteCategory(categoryId: number): Promise<void> {
   await asJson(
     await fetch(`${API_BASE}/categories/${categoryId}`, { method: "DELETE" })
   );
+}
+
+export async function updateCategoryBudget(
+  categoryId: number,
+  monthlyBudget: number | null
+): Promise<Category> {
+  return asJson(
+    await fetch(`${API_BASE}/categories/${categoryId}/budget`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ monthly_budget: monthlyBudget }),
+    })
+  );
+}
+
+export async function getHealthScore(): Promise<HealthScore> {
+  return asJson(await fetch(`${API_BASE}/health-score`));
 }
 
 export async function listTransactions(month?: string): Promise<Transaction[]> {

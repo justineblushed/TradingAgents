@@ -96,6 +96,9 @@ class Category(Base):
     kind: Mapped[CategoryKind] = mapped_column(
         Enum(CategoryKind), default=CategoryKind.expense
     )
+    # Optional monthly spending target; drives the "within budget" health
+    # metric and the biggest-opportunity insight. Null = no target set.
+    monthly_budget: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
 
     rules: Mapped[list["CategoryRule"]] = relationship(back_populates="category")
 

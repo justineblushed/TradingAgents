@@ -8,6 +8,7 @@ from app.routers import (
     categories,
     coverage,
     dashboard,
+    healthscore,
     networth,
     statements,
     transactions,
@@ -37,6 +38,7 @@ def health() -> dict:
 app.include_router(accounts.router)
 app.include_router(categories.router)
 app.include_router(coverage.router)
+app.include_router(healthscore.router)
 app.include_router(networth.router)
 app.include_router(statements.router)
 app.include_router(transactions.router)
