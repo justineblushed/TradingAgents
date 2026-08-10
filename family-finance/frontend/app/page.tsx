@@ -14,12 +14,16 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import Link from "next/link";
 import {
+  CoverageSummary,
   CreditCardSummary,
   DashboardSummary,
   getCreditCardSummaries,
   getDashboardSummary,
+  getStatementCoverage,
 } from "@/lib/api";
+import { formatCurrency, formatSignedCurrency } from "@/lib/format";
 
 const COLORS = ["#2f6fed", "#22c55e", "#f59e0b", "#ef4444", "#a855f7", "#0ea5e9", "#64748b"];
 
@@ -32,7 +36,15 @@ export default function DashboardPage() {
   const [month, setMonth] = useState(currentMonth());
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [cards, setCards] = useState<CreditCardSummary[] | null>(null);
+  const [coverage, setCoverage] = useState<CoverageSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Missing-statement check is independent of the selected month.
+    getStatementCoverage()
+      .then(setCoverage)
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     setSummary(null);
@@ -72,6 +84,22 @@ export default function DashboardPage() {
         </p>
       )}
 
+      {coverage && coverage.total_missing > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          <span>
+            ⚠ {coverage.total_missing} month
+            {coverage.total_missing === 1 ? "" : "s"} of statements missing
+            across your accounts — totals for those months are incomplete.
+          </span>
+          <Link
+            href="/statement-log"
+            className="shrink-0 font-medium text-amber-900 underline hover:text-amber-700"
+          >
+            View checklist
+          </Link>
+        </div>
+      )}
+
       {!summary && !error && (
         <p className="py-16 text-center text-sm text-slate-400">Loading…</p>
       )}
@@ -106,7 +134,7 @@ export default function DashboardPage() {
                         <Cell key={i} fill={COLORS[i % COLORS.length]} />
                       ))}
                     </Pie>
-                    <Tooltip formatter={(v: number) => `$${v.toFixed(2)}`} />
+                    <Tooltip formatter={(v: number) => formatCurrency(v)} />
                     <Legend
                       layout="vertical"
                       align="right"
@@ -127,7 +155,7 @@ export default function DashboardPage() {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis type="number" />
                     <YAxis type="category" dataKey="name" width={140} />
-                    <Tooltip formatter={(v: number) => `$${v.toFixed(2)}`} />
+                    <Tooltip formatter={(v: number) => formatCurrency(v)} />
                     <Bar
                       dataKey="value"
                       fill="#2f6fed"
@@ -165,7 +193,7 @@ function CreditCardCard({ card }: { card: CreditCardSummary }) {
           label="Current balance"
           value={
             card.current_balance !== null
-              ? `$${card.current_balance.toFixed(2)}${
+              ? `${formatSignedCurrency(card.current_balance)}${
                   card.balance_is_estimated ? " (estimated)" : ""
                 }`
               : "—"
@@ -173,12 +201,12 @@ function CreditCardCard({ card }: { card: CreditCardSummary }) {
         />
         <Row
           label="Available credit"
-          value={card.available_credit !== null ? `$${card.available_credit.toFixed(2)}` : "—"}
+          value={card.available_credit !== null ? formatCurrency(card.available_credit) : "—"}
         />
-        <Row label="This month's spending" value={`$${card.month_spending.toFixed(2)}`} />
+        <Row label="This month's spending" value={formatCurrency(card.month_spending)} />
         <Row
           label="Payments made"
-          value={`$${card.month_payments.toFixed(2)}`}
+          value={formatCurrency(card.month_payments)}
           muted
         />
       </dl>
@@ -220,7 +248,7 @@ function StatCard({
     <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <p className="text-sm text-slate-500">{label}</p>
       <p className={`mt-1 text-2xl font-semibold ${color}`}>
-        ${value.toFixed(2)}
+        {formatSignedCurrency(value)}
       </p>
     </div>
   );

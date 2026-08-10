@@ -11,6 +11,7 @@ import {
   listCategories,
   previewStatement,
 } from "@/lib/api";
+import { formatSignedCurrency } from "@/lib/format";
 
 export default function UploadPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -281,7 +282,7 @@ export default function UploadPage() {
                         t.amount < 0 ? "text-green-600" : "text-slate-800"
                       }`}
                     >
-                      ${t.amount.toFixed(2)}
+                      {formatSignedCurrency(t.amount)}
                     </td>
                     <td>
                       <select

@@ -87,6 +87,24 @@ export type NetWorthSummary = {
   accounts: AccountWithBalance[];
 };
 
+export type MonthCoverage = {
+  month: string;
+  transaction_count: number;
+  covered: boolean;
+};
+
+export type AccountCoverage = {
+  account_id: number;
+  account_name: string;
+  months: MonthCoverage[];
+  missing_months: string[];
+};
+
+export type CoverageSummary = {
+  accounts: AccountCoverage[];
+  total_missing: number;
+};
+
 export type CategoryKind = "expense" | "income" | "transfer";
 
 export type Category = {
@@ -147,6 +165,10 @@ export async function recordAccountBalance(
 
 export async function getNetWorthSummary(): Promise<NetWorthSummary> {
   return asJson(await fetch(`${API_BASE}/net-worth/summary`));
+}
+
+export async function getStatementCoverage(): Promise<CoverageSummary> {
+  return asJson(await fetch(`${API_BASE}/coverage/statements`));
 }
 
 export async function previewStatement(

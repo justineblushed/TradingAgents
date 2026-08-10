@@ -11,6 +11,7 @@ import {
   getNetWorthSummary,
   recordAccountBalance,
 } from "@/lib/api";
+import { formatCurrency, formatSignedCurrency } from "@/lib/format";
 
 const TYPE_LABELS: Record<AccountType, string> = {
   cash: "Cash",
@@ -145,25 +146,25 @@ function NetWorthHeader({ summary }: { summary: NetWorthSummary }) {
         <div>
           <p className="text-sm text-slate-500">Assets</p>
           <p className="mt-1 text-2xl font-semibold text-green-600">
-            ${summary.assets_total.toFixed(2)}
+            {formatCurrency(summary.assets_total)}
           </p>
         </div>
         <div>
           <p className="text-sm text-slate-500">Liabilities</p>
           <p className="mt-1 text-2xl font-semibold text-red-600">
-            -${summary.liabilities_total.toFixed(2)}
+            -{formatCurrency(summary.liabilities_total)}
           </p>
         </div>
         <div>
           <p className="text-sm text-slate-500">Net Worth</p>
           <p className="mt-1 text-3xl font-bold text-brand-700">
-            ${summary.net_worth.toFixed(2)}
+            {formatSignedCurrency(summary.net_worth)}
           </p>
         </div>
       </div>
       {deltaKnown && (
         <p className={`mt-4 text-sm font-medium ${deltaUp ? "text-green-600" : "text-red-600"}`}>
-          {deltaUp ? "↑" : "↓"} ${Math.abs(summary.delta as number).toFixed(2)} vs last month
+          {deltaUp ? "↑" : "↓"} {formatCurrency(Math.abs(summary.delta as number))} vs last month
         </p>
       )}
       {!deltaKnown && (
@@ -240,7 +241,7 @@ function AccountRow({
         </div>
         <div className="text-right">
           <p className="text-sm font-semibold text-slate-800">
-            {account.current_balance !== null ? `$${account.current_balance.toFixed(2)}` : "—"}
+            {account.current_balance !== null ? formatSignedCurrency(account.current_balance) : "—"}
           </p>
           <p className="text-xs text-slate-400">
             {account.balance_is_estimated

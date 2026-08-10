@@ -8,6 +8,7 @@ import {
   listTransactions,
   setTransactionCategory,
 } from "@/lib/api";
+import { formatSignedCurrency } from "@/lib/format";
 
 function currentMonth(): string {
   const now = new Date();
@@ -118,7 +119,7 @@ export default function TransactionsPage() {
                         t.amount < 0 ? "text-green-600" : "text-slate-800"
                       }`}
                     >
-                      ${t.amount.toFixed(2)}
+                      {formatSignedCurrency(t.amount)}
                     </td>
                     <td>
                       <div className="flex items-center gap-2">

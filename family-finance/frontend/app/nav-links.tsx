@@ -8,13 +8,13 @@ const LINKS = [
   { href: "/net-worth", label: "Net Worth" },
   { href: "/transactions", label: "Transactions" },
   { href: "/categories", label: "Categories" },
-  { href: "/upload", label: "Upload Statement" },
+  { href: "/statement-log", label: "Statement Log" },
 ];
 
 export default function NavLinks() {
   const pathname = usePathname();
   return (
-    <nav className="flex gap-4 text-sm font-medium">
+    <nav className="flex flex-wrap items-center gap-4 text-sm font-medium">
       {LINKS.map((link) => {
         const active = pathname === link.href;
         return (
@@ -28,6 +28,17 @@ export default function NavLinks() {
           </Link>
         );
       })}
+      <Link
+        href="/upload"
+        aria-current={pathname === "/upload" ? "page" : undefined}
+        className={`rounded-md px-3 py-1.5 font-medium text-white shadow-sm ${
+          pathname === "/upload"
+            ? "bg-brand-700"
+            : "bg-brand-500 hover:bg-brand-600"
+        }`}
+      >
+        + Upload Statement
+      </Link>
     </nav>
   );
 }

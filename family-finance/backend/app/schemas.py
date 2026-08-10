@@ -118,6 +118,24 @@ class CreditCardSummary(BaseModel):
     month_payments: float
 
 
+class MonthCoverage(BaseModel):
+    month: str  # "2026-07"
+    transaction_count: int
+    covered: bool
+
+
+class AccountCoverage(BaseModel):
+    account_id: int
+    account_name: str
+    months: list[MonthCoverage]
+    missing_months: list[str]
+
+
+class CoverageSummary(BaseModel):
+    accounts: list[AccountCoverage]
+    total_missing: int
+
+
 class DashboardSummary(BaseModel):
     """Household cash flow for the month. Transfers between the family's own
     accounts (e.g. paying off a credit card from chequing) are excluded from
