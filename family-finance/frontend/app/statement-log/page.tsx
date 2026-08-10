@@ -12,9 +12,12 @@ function monthLabel(month: string): string {
   });
 }
 
+type SortOrder = "newest" | "oldest";
+
 export default function StatementLogPage() {
   const [coverage, setCoverage] = useState<CoverageSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sortOrder, setSortOrder] = useState<SortOrder>("newest");
 
   useEffect(() => {
     getStatementCoverage()
@@ -24,13 +27,26 @@ export default function StatementLogPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-lg font-semibold text-slate-800">Statement Log</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          A checklist of which months have statement data for each credit card,
-          so you can spot gaps before they skew the numbers. A month counts as
-          covered once it has at least one imported transaction.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-lg font-semibold text-slate-800">Statement Log</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            A checklist of which months have statement data for each credit card,
+            so you can spot gaps before they skew the numbers. A month counts as
+            covered once it has at least one imported transaction.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 text-sm">
+          <label className="text-slate-500">Sort</label>
+          <select
+            value={sortOrder}
+            onChange={(e) => setSortOrder(e.target.value as SortOrder)}
+            className="rounded-md border border-slate-300 px-2 py-1 text-sm"
+          >
+            <option value="newest">Newest month first</option>
+            <option value="oldest">Oldest month first</option>
+          </select>
+        </div>
       </div>
 
       {error && (
@@ -79,7 +95,10 @@ export default function StatementLogPage() {
               </p>
             ) : (
               <div className="flex flex-wrap gap-2">
-                {account.months.map((m) => (
+                {(sortOrder === "newest"
+                  ? [...account.months].reverse()
+                  : account.months
+                ).map((m) => (
                   <div
                     key={m.month}
                     title={
@@ -106,7 +125,14 @@ export default function StatementLogPage() {
 
             {account.missing_months.length > 0 && (
               <p className="mt-3 text-xs text-slate-500">
-                Missing: {account.missing_months.map(monthLabel).join(", ")} —{" "}
+                Missing:{" "}
+                {(sortOrder === "newest"
+                  ? [...account.missing_months].reverse()
+                  : account.missing_months
+                )
+                  .map(monthLabel)
+                  .join(", ")}{" "}
+                —{" "}
                 <Link
                   href="/upload"
                   className="font-medium text-brand-600 hover:text-brand-700"
