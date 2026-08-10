@@ -83,3 +83,32 @@ def test_empty_file():
     result = _parse("")
     assert result.transactions == []
     assert any("empty" in w.lower() for w in result.warnings)
+
+
+HEADERLESS_BANK_CSV = """2026-08-05,E-TRANSFER 000000000000 sample@example.com,,400.00
+2026-08-04,PAY PER USE OVERDRAFT FEE,5.00,
+2026-08-04,PREAUTHORIZED DEBIT SAMPLE INSURANCE,135.68,
+2026-08-04,PREAUTHORIZED DEBIT SAMPLE MTG PYT,800.00,
+"""
+
+
+def test_headerless_bank_export():
+    """CIBC-style exports have no header row — columns are inferred."""
+    result = _parse(HEADERLESS_BANK_CSV)
+    assert len(result.transactions) == 4
+    assert result.warnings == []
+
+
+def test_headerless_debit_positive_credit_negative():
+    result = _parse(HEADERLESS_BANK_CSV)
+    etransfer = next(t for t in result.transactions if "E-TRANSFER" in t.description)
+    fee = next(t for t in result.transactions if "OVERDRAFT" in t.description)
+    assert etransfer.amount == -400.00  # credit column = money in
+    assert fee.amount == 5.00  # debit column = money out
+
+
+def test_headerless_single_amount_column():
+    result = _parse("2026-07-01,COFFEE PLACE,4.50\n2026-07-02,REFUND,(2.00)\n")
+    assert len(result.transactions) == 2
+    assert result.transactions[0].amount == 4.50
+    assert result.transactions[1].amount == -2.00

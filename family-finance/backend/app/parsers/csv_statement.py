@@ -69,6 +69,46 @@ def _find_column(headers: list[str], *needles: str, exclude: tuple[str, ...] = (
     return None
 
 
+def _infer_headerless_columns(
+    rows: list[list[str]],
+) -> tuple[int, int, int | None, int | None, int | None] | None:
+    """Infer (date, description, amount, out, in) column indexes for a CSV
+    with no header row, by looking at what actually parses in each column.
+
+    Convention for two money columns follows the common bank-export order:
+    debit (money out) first, credit (money in) second.
+    """
+    sample = rows[:50]
+    n_cols = max(len(r) for r in sample)
+    if n_cols < 3:
+        return None
+
+    date_col = None
+    money_cols: list[int] = []
+    text_cols: list[int] = []
+
+    for col in range(n_cols):
+        values = [r[col].strip() for r in sample if col < len(r) and r[col].strip()]
+        if not values:
+            continue
+        if all(_parse_date(v) is not None for v in values):
+            if date_col is None:
+                date_col = col
+            continue
+        if all(_parse_money(v) is not None for v in values):
+            money_cols.append(col)
+            continue
+        text_cols.append(col)
+
+    if date_col is None or not text_cols or not money_cols:
+        return None
+
+    desc_col = text_cols[0]
+    if len(money_cols) == 1:
+        return date_col, desc_col, money_cols[0], None, None
+    return date_col, desc_col, None, money_cols[0], money_cols[1]
+
+
 def parse_csv_statement(raw_bytes: bytes) -> ParseResult:
     result = ParseResult()
     # utf-8-sig strips the BOM Excel prepends to CSV exports.
@@ -95,15 +135,28 @@ def parse_csv_statement(raw_bytes: bytes) -> ParseResult:
     out_col = _find_column(headers, "funds out", "money out", "debit", "withdrawal", "expense")
     in_col = _find_column(headers, "funds in", "money in", "credit", "deposit", "income", "refund")
 
-    if date_col is None or desc_col is None or (amount_col is None and out_col is None and in_col is None):
-        result.warnings.append(
-            "Could not recognize the CSV columns. Needs a date column, a "
-            "description/details column, and either an amount column or "
-            "funds out / funds in columns."
-        )
-        return result
+    data_rows = rows[1:]
+    first_line = 2
 
-    for line_no, row in enumerate(rows[1:], start=2):
+    if date_col is None or desc_col is None or (amount_col is None and out_col is None and in_col is None):
+        # Some bank exports (e.g. CIBC) have no header row at all — the file
+        # starts straight with data. Infer columns from content instead.
+        inferred = _infer_headerless_columns(rows)
+        if inferred is None:
+            result.warnings.append(
+                "Could not recognize the CSV columns. Needs a date column, a "
+                "description/details column, and either an amount column or "
+                "funds out / funds in columns (a headerless bank export with "
+                "date, description, debit, credit columns also works)."
+            )
+            return result
+        date_col, desc_col, amount_col, out_col, in_col = inferred
+        post_date_col = None
+        category_col = None
+        data_rows = rows
+        first_line = 1
+
+    for line_no, row in enumerate(data_rows, start=first_line):
         def cell(idx: int | None) -> str:
             return row[idx].strip() if idx is not None and idx < len(row) else ""
 
