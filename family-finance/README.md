@@ -52,6 +52,15 @@ machine running the backend.
   it has repeated at least three times on a steady enough rhythm, and each
   row shows the evidence behind it. Amounts that move between cycles are
   shown as a range rather than a single confident number.
+- **Cash Flow Sankey** (`/cash-flow`): income sources flow into a hub, then
+  out to spending groups and their categories, plus whatever's left over
+  to Savings. Node colours are the same ones used everywhere else in the
+  app, and clicking a category opens its drill-down. A group with only
+  one populated category that month is drawn as a single node rather than
+  a group and an identical-looking leaf underneath it. When spending
+  exceeds income, there's no fabricated flow into savings — a
+  negative-value link isn't meaningful in a Sankey — the gap is reported
+  as a number instead.
 - **Cash flow vs. balance sheet are modeled separately, on purpose:**
   - *Cash flow* (`/dashboard`, `/transactions`): spending and income for
     a month, computed from imported transactions. Transactions in a

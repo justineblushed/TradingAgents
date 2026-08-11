@@ -663,6 +663,35 @@ export async function getUpcoming(horizonDays?: number): Promise<UpcomingSummary
   return asJson(await fetch(`${API_BASE}/dashboard/upcoming${qs}`));
 }
 
+export type SankeyNodeKind = "income" | "hub" | "group" | "category" | "savings";
+
+export type SankeyNode = {
+  name: string;
+  color: string;
+  kind: SankeyNodeKind;
+};
+
+export type SankeyLinkData = {
+  source: number;
+  target: number;
+  value: number;
+};
+
+export type SankeySummary = {
+  month: string;
+  total_income: number;
+  total_spending: number;
+  net_cash_flow: number;
+  nodes: SankeyNode[];
+  links: SankeyLinkData[];
+  shortfall: number | null;
+};
+
+export async function getSankey(month?: string): Promise<SankeySummary> {
+  const qs = month ? `?month=${month}` : "";
+  return asJson(await fetch(`${API_BASE}/dashboard/sankey${qs}`));
+}
+
 export async function updateCategoryClassification(
   categoryId: number,
   costType: CostType,

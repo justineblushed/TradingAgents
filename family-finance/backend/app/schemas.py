@@ -505,6 +505,41 @@ class UpcomingSummary(BaseModel):
     bills_hint: str = ""
 
 
+class SankeyNode(BaseModel):
+    name: str
+    color: str
+    # "income" | "hub" | "group" | "category" | "savings" — lets the
+    # frontend style each column differently without re-deriving it.
+    kind: str
+
+
+class SankeyLink(BaseModel):
+    source: int  # index into SankeySummary.nodes
+    target: int
+    value: float
+
+
+class SankeySummary(BaseModel):
+    """Income -> spending groups -> categories, plus leftover to savings.
+
+    Transfers are excluded the same way the rest of the dashboard excludes
+    them — paying off your own credit card isn't a flow of money anywhere.
+    Nodes carry each category's own colour so this diagram, the dashboard
+    charts, and the drill-down all agree on what a colour means.
+    """
+
+    month: str
+    total_income: float
+    total_spending: float
+    net_cash_flow: float
+    nodes: list[SankeyNode]
+    links: list[SankeyLink]
+    # When spending exceeded income, there's no "leftover" to draw as a
+    # flow — a negative-value link isn't meaningful in a Sankey. The gap is
+    # reported as a number instead of being fabricated as a node.
+    shortfall: float | None = None
+
+
 class DashboardSummary(BaseModel):
     """Household cash flow for the month. Transfers between the family's own
     accounts (e.g. paying off a credit card from chequing) are excluded from

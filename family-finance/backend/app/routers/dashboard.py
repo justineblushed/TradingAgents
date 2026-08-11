@@ -28,6 +28,9 @@ from app.schemas import (
     CreditCardSummary,
     DashboardSummary,
     NextPayday,
+    SankeyLink,
+    SankeyNode,
+    SankeySummary,
     SpendingControl,
     TransactionOut,
     UpcomingBill,
@@ -516,4 +519,125 @@ def category_detail(
             )
             for r in rows
         ],
+    )
+
+
+_UNCATEGORIZED_COLOR = "#94a3b8"
+_HUB_COLOR = "#0f766e"
+_SAVINGS_COLOR = "#0d9488"
+
+
+@router.get("/sankey", response_model=SankeySummary)
+def sankey(month: str | None = None, db: Session = Depends(get_db)):
+    """Income -> spending groups -> categories, for the cash-flow diagram.
+
+    Uses the same netting as /summary (transfers excluded, refunds offset
+    their category) so this diagram's totals always agree with the
+    dashboard's KPI cards for the same month — a Sankey that told a
+    different story than the numbers next to it would be worse than no
+    Sankey at all.
+    """
+    month = month or _current_month()
+    start, end = month_bounds(month)
+
+    rows = (
+        db.query(Transaction)
+        .options(joinedload(Transaction.category))
+        .filter(Transaction.trans_date >= start, Transaction.trans_date < end)
+        .all()
+    )
+    rows = [r for r in rows if not (r.category and r.category.kind == CategoryKind.transfer)]
+
+    income_by_category: dict[str, float] = defaultdict(float)
+    spending_by_category: dict[str, float] = defaultdict(float)
+    group_of: dict[str, str] = {}
+    total_income = 0.0
+    total_spending = 0.0
+
+    for r in rows:
+        amount = float(r.amount)
+        kind = r.category.kind if r.category else None
+        is_spending = kind == CategoryKind.expense or (kind is None and amount > 0)
+        name = r.category.name if r.category else "Uncategorized"
+        if is_spending:
+            total_spending += amount
+            spending_by_category[name] += amount
+            group_of[name] = (
+                (r.category.group_name or "Other") if r.category else "Uncategorized"
+            )
+        else:
+            total_income += -amount
+            income_by_category[name] += -amount
+
+    colors = {c.name: (c.color or _UNCATEGORIZED_COLOR) for c in db.query(Category).all()}
+
+    # A group is coloured after its biggest category, so this diagram and
+    # the dashboard's group pie (which does the same thing) agree visually.
+    group_totals: dict[str, float] = defaultdict(float)
+    group_dominant: dict[str, tuple[str, float]] = {}
+    for name, amount in spending_by_category.items():
+        if amount <= 0:
+            continue
+        group = group_of.get(name, "Other")
+        group_totals[group] += amount
+        if amount > group_dominant.get(group, ("", 0.0))[1]:
+            group_dominant[group] = (name, amount)
+
+    # A group with only one populated category this month has no more
+    # detail to add at a leaf level — splitting it would just draw a second
+    # node with the same name and the same width as the group above it.
+    categories_in_group: dict[str, list[str]] = defaultdict(list)
+    for name, amount in spending_by_category.items():
+        if amount > 0:
+            categories_in_group[group_of.get(name, "Other")].append(name)
+
+    nodes: list[SankeyNode] = []
+    links: list[SankeyLink] = []
+    index: dict[tuple[str, str], int] = {}
+
+    def add_node(kind: str, name: str, color: str) -> int:
+        key = (kind, name)
+        if key not in index:
+            index[key] = len(nodes)
+            nodes.append(SankeyNode(name=name, color=color, kind=kind))
+        return index[key]
+
+    hub = add_node("hub", "Income", _HUB_COLOR)
+
+    for name, amount in sorted(income_by_category.items(), key=lambda kv: -kv[1]):
+        if amount <= 0:
+            continue
+        node = add_node("income", name, colors.get(name, _UNCATEGORIZED_COLOR))
+        links.append(SankeyLink(source=node, target=hub, value=round(amount, 2)))
+
+    for group, total in sorted(group_totals.items(), key=lambda kv: -kv[1]):
+        dominant_name = group_dominant.get(group, (group, 0.0))[0]
+        group_node = add_node("group", group, colors.get(dominant_name, _UNCATEGORIZED_COLOR))
+        links.append(SankeyLink(source=hub, target=group_node, value=round(total, 2)))
+
+        if len(categories_in_group.get(group, [])) < 2:
+            continue
+        for name in sorted(
+            categories_in_group[group], key=lambda n: -spending_by_category[n]
+        ):
+            amount = spending_by_category[name]
+            cat_node = add_node("category", name, colors.get(name, _UNCATEGORIZED_COLOR))
+            links.append(SankeyLink(source=group_node, target=cat_node, value=round(amount, 2)))
+
+    net = total_income - total_spending
+    shortfall = None
+    if net > 0.01:
+        savings_node = add_node("savings", "Savings", _SAVINGS_COLOR)
+        links.append(SankeyLink(source=hub, target=savings_node, value=round(net, 2)))
+    elif net < -0.01:
+        shortfall = round(-net, 2)
+
+    return SankeySummary(
+        month=month,
+        total_income=round(total_income, 2),
+        total_spending=round(total_spending, 2),
+        net_cash_flow=round(net, 2),
+        nodes=nodes,
+        links=links,
+        shortfall=shortfall,
     )
