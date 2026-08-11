@@ -112,3 +112,69 @@ def test_headerless_single_amount_column():
     assert len(result.transactions) == 2
     assert result.transactions[0].amount == 4.50
     assert result.transactions[1].amount == -2.00
+
+
+# --- single Amount column, ledger sign convention (Simplii-style chequing) ---
+#
+# Many debit/chequing exports sign a single Amount column the opposite way
+# from this app: a withdrawal (money out) is negative, a deposit (money in)
+# is positive. There's no header text that says so — "Amount" doesn't
+# distinguish the two conventions — so the parser leans on the fact that in
+# any real statement, spending transactions vastly outnumber deposits: if
+# most of the raw values come out negative, the file must be using the
+# ledger convention, and every sign gets flipped so spending reads positive
+# here too, matching the credit-card-style convention the rest of the app
+# assumes.
+
+SIMPLII_STYLE_CSV = """Date,Description,Amount
+2026-07-02,SAMPLE GROCER,-84.20
+2026-07-03,SAMPLE COFFEE,-6.75
+2026-07-05,SAMPLE GAS BAR,-52.00
+2026-07-14,PAYROLL DEPOSIT SAMPLE CORP,2140.00
+2026-07-20,SAMPLE PHARMACY,-31.10
+"""
+
+
+def test_debit_account_ledger_convention_is_detected_and_flipped():
+    result = _parse(SIMPLII_STYLE_CSV)
+    grocer = next(t for t in result.transactions if "GROCER" in t.description)
+    payroll = next(t for t in result.transactions if "PAYROLL" in t.description)
+    # Spending was negative in the file; it must read positive (money out)
+    # here, and the deposit must read negative (money in) — the app's
+    # convention, opposite of what the file itself used.
+    assert grocer.amount == 84.20
+    assert payroll.amount == -2140.00
+
+
+def test_flip_is_disclosed_as_a_warning_not_applied_silently():
+    result = _parse(SIMPLII_STYLE_CSV)
+    assert any("opposite sign convention" in w for w in result.warnings)
+
+
+def test_a_tied_or_positive_majority_amount_column_is_left_alone():
+    # Credit-card-style exports: charges positive (the app's own convention
+    # already), refunds rare enough to never outnumber charges. Must NOT be
+    # flipped, or a correctly-signed file would come out backwards.
+    csv_text = """Date,Description,Amount
+2026-07-01,SAMPLE RESTAURANT,45.00
+2026-07-02,SAMPLE SHOP,60.00
+2026-07-03,SAMPLE REFUND,-12.00
+"""
+    result = _parse(csv_text)
+    restaurant = next(t for t in result.transactions if "RESTAURANT" in t.description)
+    refund = next(t for t in result.transactions if "REFUND" in t.description)
+    assert restaurant.amount == 45.00
+    assert refund.amount == -12.00
+    assert not any("opposite sign convention" in w for w in result.warnings)
+
+
+def test_headerless_debit_convention_is_also_detected():
+    """The same ledger-vs-app-convention ambiguity applies whether or not
+    the file has a header row."""
+    result = _parse(
+        "2026-07-02,SAMPLE GROCER,-84.20\n"
+        "2026-07-05,SAMPLE GAS BAR,-52.00\n"
+        "2026-07-14,PAYROLL DEPOSIT,2140.00\n"
+    )
+    grocer = next(t for t in result.transactions if "GROCER" in t.description)
+    assert grocer.amount == 84.20

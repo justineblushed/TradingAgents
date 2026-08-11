@@ -69,6 +69,36 @@ def _find_column(headers: list[str], *needles: str, exclude: tuple[str, ...] = (
     return None
 
 
+def _should_flip_single_amount_column(rows: list[list[str]], amount_col: int) -> bool:
+    """Decide whether a single signed "Amount" column uses the opposite sign
+    convention from this app's (positive = money out, negative = money in).
+
+    Credit-card exports overwhelmingly follow this app's convention already
+    (a charge is positive; refunds are rare). Chequing/savings exports from
+    many banks — Simplii among them — follow the ledger convention instead:
+    a withdrawal is negative, a deposit positive. There's no column name to
+    go on ("Amount" doesn't say which), so this leans on a property that
+    holds regardless of bank: in any real statement, spending transactions
+    vastly outnumber deposits. If parsing the column at face value would
+    make negative amounts the majority, the file is using the ledger
+    convention and every amount needs its sign flipped so spending reads
+    as positive here too. A tie (or a majority already positive) leaves the
+    file alone.
+    """
+    positive = negative = 0
+    for row in rows:
+        if amount_col >= len(row):
+            continue
+        value = _parse_money(row[amount_col])
+        if value is None or value == 0:
+            continue
+        if value > 0:
+            positive += 1
+        else:
+            negative += 1
+    return negative > positive
+
+
 def _infer_headerless_columns(
     rows: list[list[str]],
 ) -> tuple[int, int, int | None, int | None, int | None] | None:
@@ -156,6 +186,18 @@ def parse_csv_statement(raw_bytes: bytes) -> ParseResult:
         data_rows = rows
         first_line = 1
 
+    flip_amount_sign = (
+        amount_col is not None and _should_flip_single_amount_column(data_rows, amount_col)
+    )
+    if flip_amount_sign:
+        result.warnings.append(
+            "This file's Amount column looked like it uses the opposite sign "
+            "convention from this app (more withdrawals than deposits came "
+            "out negative) — signs were flipped so spending shows as a "
+            "positive amount. Check a few rows below before importing; if "
+            "something looks backwards, let us know."
+        )
+
     for line_no, row in enumerate(data_rows, start=first_line):
         def cell(idx: int | None) -> str:
             return row[idx].strip() if idx is not None and idx < len(row) else ""
@@ -175,6 +217,8 @@ def parse_csv_statement(raw_bytes: bytes) -> ParseResult:
             if amount is None:
                 result.warnings.append(f"Line {line_no}: unrecognized amount {cell(amount_col)!r} — row skipped.")
                 continue
+            if flip_amount_sign:
+                amount = -amount
         else:
             out_amount = _parse_money(cell(out_col)) if out_col is not None else None
             in_amount = _parse_money(cell(in_col)) if in_col is not None else None

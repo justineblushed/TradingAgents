@@ -100,6 +100,18 @@ a new parser module under `backend/app/parsers/` — the existing one
 (`creditcard_statement.py`) is a template for that; nothing else in the
 app needs to change to add a second bank format.
 
+CSV exports are auto-detected (`csv_statement.py`), including headerless
+bank exports and ledger-style Funds Out/In columns. One ambiguity worth
+knowing about: a single signed "Amount" column doesn't say which sign
+convention it uses. Credit-card exports are almost always
+positive-for-charge (matching this app's own convention); many
+chequing/savings exports — Simplii among them — sign it the opposite way,
+negative for a withdrawal. Since "Amount" alone can't distinguish the
+two, the parser leans on the fact that spending transactions vastly
+outnumber deposits in any real statement: if most of a file's raw values
+come out negative, it flips every sign so spending reads positive here
+too, and says so in the preview warnings rather than doing it silently.
+
 ## Running locally
 
 ### Quick start (recommended)
