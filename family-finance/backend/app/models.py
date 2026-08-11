@@ -161,6 +161,12 @@ class Category(Base):
     controllability: Mapped[Controllability] = mapped_column(
         Enum(Controllability), default=Controllability.medium
     )
+    # Appearance. A category keeps the same colour everywhere it appears, so
+    # the pie, the bar chart and the drill-down all agree — a palette that
+    # rotates by chart position means "the blue slice" changes meaning
+    # whenever spending reorders the chart.
+    color: Mapped[str] = mapped_column(String(7), default="")  # "#2f6fed"
+    emoji: Mapped[str] = mapped_column(String(8), default="")
 
     rules: Mapped[list["CategoryRule"]] = relationship(back_populates="category")
 

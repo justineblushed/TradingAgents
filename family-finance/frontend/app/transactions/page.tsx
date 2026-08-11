@@ -197,6 +197,16 @@ function TransactionsInner() {
                     </td>
                     <td>
                       <div className="flex items-center gap-2">
+                        <span
+                          aria-hidden
+                          title={t.category ?? "Uncategorized"}
+                          className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                          style={{
+                            backgroundColor:
+                              categories.find((c) => c.name === t.category)?.color ||
+                              "#cbd5e1",
+                          }}
+                        />
                         <select
                           value={t.category ?? ""}
                           onChange={(e) => handleCategoryChange(t.id, e.target.value)}
@@ -209,7 +219,7 @@ function TransactionsInner() {
                           {!t.category && <option value="">Uncategorized</option>}
                           {categories.map((c) => (
                             <option key={c.id} value={c.name}>
-                              {c.name}
+                              {c.emoji ? `${c.emoji} ${c.name}` : c.name}
                             </option>
                           ))}
                         </select>

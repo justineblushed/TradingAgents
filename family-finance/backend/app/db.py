@@ -62,6 +62,13 @@ def _migrate_existing_tables() -> bool:
                 conn.execute(
                     text("ALTER TABLE categories ADD COLUMN group_name VARCHAR(40) DEFAULT ''")
                 )
+            if "color" not in cols:
+                conn.execute(
+                    text("ALTER TABLE categories ADD COLUMN color VARCHAR(7) DEFAULT ''")
+                )
+                conn.execute(
+                    text("ALTER TABLE categories ADD COLUMN emoji VARCHAR(8) DEFAULT ''")
+                )
             if "cost_type" not in cols:
                 conn.execute(
                     text("ALTER TABLE categories ADD COLUMN cost_type VARCHAR(20) DEFAULT 'variable'")
@@ -230,6 +237,42 @@ def _migrate_category_taxonomy() -> None:
         db.close()
 
 
+def _ensure_category_appearance() -> None:
+    """Give every category a colour, keeping the ones already chosen.
+
+    Runs on every startup rather than once behind a migration flag: it only
+    ever fills a blank, so it doubles as the assignment step for categories
+    the user creates later. Emoji stays blank when there's no sensible
+    default — a wrong icon is worse than none.
+    """
+    from app.categorize import DEFAULT_APPEARANCE, FALLBACK_COLORS
+    from app.models import Category
+
+    db = SessionLocal()
+    try:
+        categories = db.query(Category).order_by(Category.id).all()
+        taken = {c.color for c in categories if c.color}
+        changed = False
+        for index, category in enumerate(categories):
+            if category.color:
+                continue
+            color, emoji = DEFAULT_APPEARANCE.get(category.name, ("", ""))
+            if not color:
+                # Prefer a fallback nobody is using yet before repeating one.
+                unused = [c for c in FALLBACK_COLORS if c not in taken]
+                pool = unused or FALLBACK_COLORS
+                color = pool[index % len(pool)]
+            category.color = color
+            taken.add(color)
+            if emoji and not category.emoji:
+                category.emoji = emoji
+            changed = True
+        if changed:
+            db.commit()
+    finally:
+        db.close()
+
+
 def _seed_tax_data() -> None:
     from app.taxseed import seed_tax_data
 
@@ -248,4 +291,5 @@ def init_db() -> None:
     _migrate_category_taxonomy()
     if needs_classification_backfill:
         _backfill_classification()
+    _ensure_category_appearance()
     _seed_tax_data()

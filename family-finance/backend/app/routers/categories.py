@@ -1,3 +1,5 @@
+import re
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -12,6 +14,7 @@ from app.models import (
     Transaction,
 )
 from app.schemas import (
+    CategoryAppearanceUpdate,
     CategoryBudgetUpdate,
     CategoryClassificationUpdate,
     CategoryCreate,
@@ -42,6 +45,8 @@ def _to_out(category: Category) -> CategoryOut:
         group_name=category.group_name or "",
         cost_type=_enum_value(category.cost_type),
         controllability=_enum_value(category.controllability),
+        color=category.color or "",
+        emoji=category.emoji or "",
     )
 
 
@@ -121,6 +126,32 @@ def set_classification(
         )
     category.cost_type = CostType(payload.cost_type)
     category.controllability = Controllability(payload.controllability)
+    db.commit()
+    db.refresh(category)
+    return _to_out(category)
+
+
+_HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+@router.patch("/{category_id}/appearance", response_model=CategoryOut)
+def set_appearance(
+    category_id: int, payload: CategoryAppearanceUpdate, db: Session = Depends(get_db)
+):
+    category = db.get(Category, category_id)
+    if category is None:
+        raise HTTPException(404, "Category not found")
+    color = payload.color.strip()
+    if not _HEX.match(color):
+        raise HTTPException(400, "Colour must be a hex value like #2f6fed")
+    # Emoji are multi-byte and often multi-codepoint (skin tones, ZWJ
+    # sequences), so cap by characters rather than trying to validate that
+    # something "is" an emoji — the column holds 8.
+    emoji = payload.emoji.strip()
+    if len(emoji) > 8:
+        raise HTTPException(400, "Emoji is too long — use one or two characters")
+    category.color = color.lower()
+    category.emoji = emoji
     db.commit()
     db.refresh(category)
     return _to_out(category)

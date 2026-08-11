@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   Category,
   CategoryKind,
@@ -12,6 +13,7 @@ import {
   createCategory,
   deleteCategory,
   listCategories,
+  setCategoryAppearance,
   updateCategoryBudget,
   updateCategoryClassification,
   updateCategoryKeywords,
@@ -109,6 +111,22 @@ export default function CategoriesPage() {
       );
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Failed to save classification");
+    }
+  }
+
+  async function handleSaveAppearance(
+    category: Category,
+    color: string,
+    emoji: string
+  ) {
+    setMessage(null);
+    try {
+      const updated = await setCategoryAppearance(category.id, color, emoji);
+      setCategories((prev) =>
+        prev ? prev.map((c) => (c.id === category.id ? updated : c)) : prev
+      );
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Failed to save appearance");
     }
   }
 
@@ -215,6 +233,7 @@ export default function CategoriesPage() {
               savingId={savingId}
               onSave={handleSaveKeywords}
               onDelete={handleDelete}
+              onSaveAppearance={handleSaveAppearance}
               showBudget
               onSaveBudget={handleSaveBudget}
               onSaveClassification={handleSaveClassification}
@@ -228,6 +247,7 @@ export default function CategoriesPage() {
             savingId={savingId}
             onSave={handleSaveKeywords}
             onDelete={handleDelete}
+            onSaveAppearance={handleSaveAppearance}
           />
           <CategoryGroup
             title="Transfer categories (excluded from spending/income)"
@@ -237,6 +257,7 @@ export default function CategoriesPage() {
             savingId={savingId}
             onSave={handleSaveKeywords}
             onDelete={handleDelete}
+            onSaveAppearance={handleSaveAppearance}
           />
         </>
       )}
@@ -255,6 +276,7 @@ function CategoryGroup({
   showBudget,
   onSaveBudget,
   onSaveClassification,
+  onSaveAppearance,
 }: {
   title: string;
   categories: Category[];
@@ -270,6 +292,7 @@ function CategoryGroup({
     costType: CostType,
     controllability: Controllability
   ) => void;
+  onSaveAppearance: (c: Category, color: string, emoji: string) => void;
 }) {
   if (categories.length === 0) return null;
   return (
@@ -281,9 +304,14 @@ function CategoryGroup({
           const dirty = draft !== c.keywords.join(", ");
           return (
             <div key={c.id} className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3 first:border-t-0 first:pt-0">
-              <span className="w-40 shrink-0 text-sm font-medium text-slate-700">
+              <AppearanceEditor category={c} onSave={onSaveAppearance} />
+              <Link
+                href={`/categories/${encodeURIComponent(c.name)}`}
+                className="w-36 shrink-0 truncate text-sm font-medium text-slate-700 hover:text-brand-700 hover:underline"
+                title={`See every ${c.name} transaction`}
+              >
                 {c.name}
-              </span>
+              </Link>
               <input
                 value={draft}
                 onChange={(e) =>
@@ -393,6 +421,60 @@ function BudgetInput({
           Set
         </button>
       )}
+    </span>
+  );
+}
+
+/** Colour swatch + emoji for one category.
+ *
+ * The swatch is a native colour input so the OS picker does the work, but it
+ * only saves on close — dragging through a gradient would otherwise fire a
+ * request per pixel. The emoji field is a plain text input rather than a
+ * curated list: the point is the household picks something meaningful to
+ * them, and any single character is valid.
+ */
+function AppearanceEditor({
+  category,
+  onSave,
+}: {
+  category: Category;
+  onSave: (c: Category, color: string, emoji: string) => void;
+}) {
+  const [color, setColor] = useState(category.color || "#64748b");
+  const [emoji, setEmoji] = useState(category.emoji || "");
+
+  useEffect(() => {
+    setColor(category.color || "#64748b");
+    setEmoji(category.emoji || "");
+  }, [category.color, category.emoji]);
+
+  function commit(nextColor: string, nextEmoji: string) {
+    if (nextColor === category.color && nextEmoji === category.emoji) return;
+    onSave(category, nextColor, nextEmoji);
+  }
+
+  return (
+    <span className="flex shrink-0 items-center gap-1">
+      <input
+        type="color"
+        value={color}
+        aria-label={`Colour for ${category.name}`}
+        title={`Colour for ${category.name}`}
+        onChange={(e) => setColor(e.target.value)}
+        onBlur={() => commit(color, emoji)}
+        className="h-7 w-7 cursor-pointer rounded border border-slate-300 bg-white p-0.5"
+      />
+      <input
+        value={emoji}
+        aria-label={`Emoji for ${category.name}`}
+        title={`Emoji for ${category.name}`}
+        placeholder="🙂"
+        maxLength={4}
+        onChange={(e) => setEmoji(e.target.value)}
+        onBlur={() => commit(color, emoji)}
+        onKeyDown={(e) => e.key === "Enter" && commit(color, emoji)}
+        className="h-7 w-9 rounded-md border border-slate-300 text-center text-sm"
+      />
     </span>
   );
 }

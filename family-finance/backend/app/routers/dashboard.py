@@ -1,7 +1,7 @@
 from collections import defaultdict
 from datetime import date as date_type, datetime, timedelta
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
 
 from app.dateutil import month_bounds
@@ -22,11 +22,14 @@ from app.recurring import detect_recurring, next_payday
 from app.schemas import (
     AreaToWatch,
     BudgetVariance,
+    CategoryDetail,
+    CategoryMonthPoint,
     CostTypeSlice,
     CreditCardSummary,
     DashboardSummary,
     NextPayday,
     SpendingControl,
+    TransactionOut,
     UpcomingBill,
     UpcomingSummary,
 )
@@ -404,4 +407,113 @@ def upcoming(
         bills=bills,
         bills_total=round(sum(b.expected_amount for b in bills), 2),
         bills_hint=bills_hint,
+    )
+
+
+# How many months of history the drill-down shows. A year reads as a season
+# cycle (heating, holidays) without the chart turning into a smear.
+_DETAIL_HISTORY_MONTHS = 12
+
+
+def _shift_month(month: str, delta: int) -> str:
+    year, mon = (int(p) for p in month.split("-"))
+    index = year * 12 + (mon - 1) + delta
+    return f"{index // 12:04d}-{index % 12 + 1:02d}"
+
+
+@router.get("/category-detail", response_model=CategoryDetail)
+def category_detail(
+    category: str, month: str | None = None, db: Session = Depends(get_db)
+):
+    """Everything about one category in one month, plus a year of context.
+
+    The total nets refunds against the category exactly as /summary does,
+    so drilling into a bar never shows a different number than the bar
+    itself. "Uncategorized" is a real destination here — it's where the
+    work is — even though it isn't a row in the categories table.
+    """
+    month = month or _current_month()
+    is_uncategorized = category == "Uncategorized"
+
+    record = (
+        None
+        if is_uncategorized
+        else db.query(Category).filter(Category.name == category).first()
+    )
+    if record is None and not is_uncategorized:
+        raise HTTPException(404, f"No category named {category!r}")
+
+    start, end = month_bounds(month)
+    query = (
+        db.query(Transaction)
+        .options(joinedload(Transaction.category), joinedload(Transaction.tags))
+        .filter(Transaction.trans_date >= start, Transaction.trans_date < end)
+    )
+    if is_uncategorized:
+        query = query.filter(Transaction.category_id.is_(None))
+    else:
+        query = query.filter(Transaction.category_id == record.id)
+    rows = query.order_by(Transaction.trans_date).all()
+
+    total = round(sum(float(r.amount) for r in rows), 2)
+    # Income reads more naturally as a positive number; expenses are already
+    # positive in this app's convention.
+    if record is not None and record.kind == CategoryKind.income:
+        total = -total
+
+    history: list[CategoryMonthPoint] = []
+    for offset in range(_DETAIL_HISTORY_MONTHS - 1, -1, -1):
+        m = _shift_month(month, -offset)
+        m_start, m_end = month_bounds(m)
+        m_query = db.query(Transaction).filter(
+            Transaction.trans_date >= m_start, Transaction.trans_date < m_end
+        )
+        if is_uncategorized:
+            m_query = m_query.filter(Transaction.category_id.is_(None))
+        else:
+            m_query = m_query.filter(Transaction.category_id == record.id)
+        m_total = sum(float(r.amount) for r in m_query.all())
+        if record is not None and record.kind == CategoryKind.income:
+            m_total = -m_total
+        history.append(
+            CategoryMonthPoint(month=m, total=round(m_total, 2), is_current=(m == month))
+        )
+
+    # "Typical" excludes the month on screen and any month with nothing in it
+    # — averaging in months before the account existed would drag it down and
+    # make every real month look like an overspend.
+    others = [p.total for p in history if not p.is_current and p.total != 0]
+    average = round(sum(others) / len(others), 2) if others else None
+
+    budget = (
+        float(record.monthly_budget)
+        if record is not None and record.monthly_budget is not None
+        else None
+    )
+
+    return CategoryDetail(
+        category=category,
+        kind=record.kind.value if record is not None else "expense",
+        group_name=(record.group_name or "") if record is not None else "",
+        color=(record.color or "") if record is not None else "#94a3b8",
+        emoji=(record.emoji or "") if record is not None else "❓",
+        month=month,
+        total=total,
+        transaction_count=len(rows),
+        monthly_budget=budget,
+        over_budget=round(total - budget, 2) if budget is not None and total > budget else None,
+        average_of_history=average,
+        history=history,
+        transactions=[
+            TransactionOut(
+                id=r.id,
+                trans_date=r.trans_date,
+                post_date=r.post_date,
+                description=r.description,
+                amount=float(r.amount),
+                category=r.category.name if r.category else None,
+                tags=sorted(t.name for t in r.tags),
+            )
+            for r in rows
+        ],
     )

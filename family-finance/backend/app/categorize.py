@@ -33,6 +33,67 @@ class DefaultCategory:
     control: Controllability = Controllability.medium
 
 
+# Starting colour and emoji per category, all editable in the app afterwards.
+#
+# Hue carries the group, shade separates categories within it, so a glance at
+# the pie reads "most of this is Housing" before you read a single label.
+# Deliberately not a rotating palette: a colour has to mean the same category
+# in every chart, or "the blue slice" changes meaning as spending reorders.
+# Shades stay dark enough to hold white text and to stay distinguishable in
+# the greyscale most people print in.
+DEFAULT_APPEARANCE: dict[str, tuple[str, str]] = {
+    # Housing — indigo
+    "Mortgage": ("#4338ca", "🏠"),
+    "Property Tax & Insurance": ("#4f46e5", "🧾"),
+    "Utilities": ("#6366f1", "💡"),
+    "Internet & Phone": ("#818cf8", "📶"),
+    "Home Maintenance": ("#a5b4fc", "🔧"),
+    # Transportation — cyan
+    "Car Payment": ("#0e7490", "🚗"),
+    "Gas & Parking": ("#0891b2", "⛽"),
+    "Car Maintenance": ("#06b6d4", "🔩"),
+    "Car Insurance": ("#22d3ee", "🛡️"),
+    # Food — green
+    "Groceries": ("#15803d", "🛒"),
+    "Dining Out": ("#4ade80", "🍜"),
+    # Family — rose
+    "Childcare & Kids": ("#be185d", "🧸"),
+    "Health & Wellness": ("#f472b6", "💊"),
+    # Lifestyle — amber / orange
+    "Shopping": ("#b45309", "🛍️"),
+    "Subscriptions": ("#d97706", "🔁"),
+    "Entertainment": ("#f59e0b", "🎬"),
+    "Personal Care": ("#fbbf24", "✂️"),
+    "Miscellaneous": ("#a8a29e", "❓"),
+    # Travel — purple
+    "Travel": ("#9333ea", "✈️"),
+    # Financial — red
+    "Bank Fees & Interest": ("#dc2626", "🏦"),
+    # Income — emerald
+    "Employment Income": ("#047857", "💼"),
+    "Rental Income": ("#059669", "🔑"),
+    "Government Benefits": ("#10b981", "🍁"),
+    "Other Income": ("#34d399", "➕"),
+    # Transfers — slate, muted on purpose: these are not spending and
+    # shouldn't compete for attention in any chart they appear in.
+    "Credit Card Payment": ("#64748b", "💳"),
+    "Account Transfer": ("#94a3b8", "🔄"),
+}
+
+# Used for user-created categories, which have no entry above. Cycled by
+# creation order so two new categories don't collide immediately.
+FALLBACK_COLORS = [
+    "#2f6fed", "#e11d48", "#0d9488", "#7c3aed", "#ca8a04",
+    "#0284c7", "#65a30d", "#c2410c", "#9333ea", "#475569",
+]
+
+
+def default_appearance(name: str, index: int = 0) -> tuple[str, str]:
+    return DEFAULT_APPEARANCE.get(
+        name, (FALLBACK_COLORS[index % len(FALLBACK_COLORS)], "")
+    )
+
+
 DEFAULT_RULES: dict[str, DefaultCategory] = {
     # --- Housing ---
     "Mortgage": DefaultCategory(["mortgage"], group="Housing", cost=CostType.fixed, control=Controllability.low),
@@ -138,12 +199,15 @@ def seed_default_categories(db: Session) -> None:
     for name, default in DEFAULT_RULES.items():
         category = existing.get(name)
         if category is None:
+            color, emoji = default_appearance(name, len(existing))
             category = Category(
                 name=name,
                 kind=default.kind,
                 group_name=default.group,
                 cost_type=default.cost,
                 controllability=default.control,
+                color=color,
+                emoji=emoji,
             )
             db.add(category)
             db.flush()

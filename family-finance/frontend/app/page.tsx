@@ -15,10 +15,12 @@ import {
   YAxis,
 } from "recharts";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   AreaToWatch,
   CONTROL_LABELS,
   Controllability,
+  Category,
   CoverageSummary,
   CreditCardSummary,
   DashboardSummary,
@@ -29,14 +31,37 @@ import {
   getSpendingControl,
   getStatementCoverage,
   getUpcoming,
+  listCategories,
 } from "@/lib/api";
 import { formatCurrency, formatSignedCurrency } from "@/lib/format";
-
-const COLORS = ["#2f6fed", "#22c55e", "#f59e0b", "#ef4444", "#a855f7", "#0ea5e9", "#64748b"];
 
 function currentMonth(): string {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
+
+/** Y-axis label for the category bar chart, rendered as a real button so the
+ *  category name itself is keyboard-reachable — clicking a bar works with a
+ *  mouse but leaves the chart unusable without one. */
+function CategoryTick(props: {
+  x?: number;
+  y?: number;
+  payload?: { value: string };
+  onSelect: (name: string) => void;
+}) {
+  const { x = 0, y = 0, payload, onSelect } = props;
+  const name = payload?.value ?? "";
+  return (
+    <foreignObject x={x - 150} y={y - 11} width={146} height={22}>
+      <button
+        onClick={() => onSelect(name)}
+        title={`See every ${name} transaction`}
+        className="w-full truncate pr-1 text-right text-xs text-slate-600 hover:text-brand-700 hover:underline"
+      >
+        {name}
+      </button>
+    </foreignObject>
+  );
 }
 
 export default function DashboardPage() {
@@ -46,7 +71,9 @@ export default function DashboardPage() {
   const [control, setControl] = useState<SpendingControl | null>(null);
   const [coverage, setCoverage] = useState<CoverageSummary | null>(null);
   const [upcoming, setUpcoming] = useState<UpcomingSummary | null>(null);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     // Both of these are about today, not the month being browsed.
@@ -55,6 +82,9 @@ export default function DashboardPage() {
       .catch(() => {});
     getUpcoming()
       .then(setUpcoming)
+      .catch(() => {});
+    listCategories()
+      .then(setCategories)
       .catch(() => {});
   }, []);
 
@@ -73,22 +103,56 @@ export default function DashboardPage() {
       .catch((e) => setError(e.message));
   }, [month]);
 
+  // A category keeps its own colour in every chart, so a colour means the
+  // same thing wherever you see it. Uncategorized is deliberately grey —
+  // it's a gap in the data, not a kind of spending.
+  const colorOf = useMemo(() => {
+    const map = new Map(categories.map((c) => [c.name, c.color]));
+    return (name: string) => map.get(name) || "#94a3b8";
+  }, [categories]);
+
+  const emojiOf = useMemo(() => {
+    const map = new Map(categories.map((c) => [c.name, c.emoji]));
+    return (name: string) => map.get(name) || "";
+  }, [categories]);
+
   const categoryData = useMemo(
     () =>
-      Object.entries(summary?.by_category ?? {}).map(([name, value]) => ({
-        name,
-        value,
-      })),
-    [summary]
+      Object.entries(summary?.by_category ?? {})
+        .map(([name, value]) => ({
+          name,
+          value,
+          color: colorOf(name),
+          label: `${emojiOf(name)} ${name}`.trim(),
+        }))
+        .sort((a, b) => b.value - a.value),
+    [summary, colorOf, emojiOf]
   );
 
-  const groupData = useMemo(
-    () =>
-      Object.entries(summary?.by_group ?? {})
-        .map(([name, value]) => ({ name, value }))
-        .sort((a, b) => b.value - a.value),
-    [summary]
-  );
+  // A group's colour is borrowed from its largest category so the pie and
+  // the bar chart visibly belong to the same palette.
+  const groupData = useMemo(() => {
+    const dominant = new Map<string, { name: string; value: number }>();
+    for (const c of categories) {
+      const spent = summary?.by_category?.[c.name] ?? 0;
+      const group = c.group_name || "Other";
+      const best = dominant.get(group);
+      if (spent > 0 && (!best || spent > best.value)) {
+        dominant.set(group, { name: c.name, value: spent });
+      }
+    }
+    return Object.entries(summary?.by_group ?? {})
+      .map(([name, value]) => ({
+        name,
+        value,
+        color: dominant.has(name) ? colorOf(dominant.get(name)!.name) : "#94a3b8",
+      }))
+      .sort((a, b) => b.value - a.value);
+  }, [summary, categories, colorOf]);
+
+  function openCategory(name: string) {
+    router.push(`/categories/${encodeURIComponent(name)}?month=${month}`);
+  }
 
   return (
     <div className="space-y-8">
@@ -156,8 +220,8 @@ export default function DashboardPage() {
                       outerRadius={90}
                       isAnimationActive={false}
                     >
-                      {groupData.map((_, i) => (
-                        <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                      {groupData.map((slice) => (
+                        <Cell key={slice.name} fill={slice.color} />
                       ))}
                     </Pie>
                     <Tooltip formatter={(v: number) => formatCurrency(v)} />
@@ -176,20 +240,45 @@ export default function DashboardPage() {
               {categoryData.length === 0 ? (
                 <EmptyState />
               ) : (
-                <ResponsiveContainer width="100%" height={280}>
-                  <BarChart data={categoryData} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis type="number" />
-                    <YAxis type="category" dataKey="name" width={140} />
-                    <Tooltip formatter={(v: number) => formatCurrency(v)} />
-                    <Bar
-                      dataKey="value"
-                      fill="#2f6fed"
-                      radius={[0, 4, 4, 0]}
-                      isAnimationActive={false}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
+                <>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart
+                      data={categoryData}
+                      layout="vertical"
+                      onClick={(state) => {
+                        const name = state?.activePayload?.[0]?.payload?.name;
+                        if (name) openCategory(name);
+                      }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis type="number" />
+                      <YAxis
+                        type="category"
+                        dataKey="name"
+                        width={150}
+                        tick={<CategoryTick onSelect={openCategory} />}
+                      />
+                      <Tooltip
+                        cursor={{ fill: "#f1f5f9" }}
+                        formatter={(v: number) => formatCurrency(v)}
+                      />
+                      <Bar
+                        dataKey="value"
+                        radius={[0, 4, 4, 0]}
+                        isAnimationActive={false}
+                        className="cursor-pointer"
+                      >
+                        {categoryData.map((row) => (
+                          <Cell key={row.name} fill={row.color} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Click a bar to see every transaction behind it, and step
+                    through other months.
+                  </p>
+                </>
               )}
             </ChartCard>
           </div>

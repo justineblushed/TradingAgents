@@ -112,6 +112,28 @@ export type RuleApplyResult = {
   changes: RuleApplyChange[];
 };
 
+export type CategoryMonthPoint = {
+  month: string;
+  total: number;
+  is_current: boolean;
+};
+
+export type CategoryDetail = {
+  category: string;
+  kind: string;
+  group_name: string;
+  color: string;
+  emoji: string;
+  month: string;
+  total: number;
+  transaction_count: number;
+  monthly_budget: number | null;
+  over_budget: number | null;
+  average_of_history: number | null;
+  history: CategoryMonthPoint[];
+  transactions: Transaction[];
+};
+
 export type NextPayday = {
   pay_date: string;
   days_away: number;
@@ -227,6 +249,8 @@ export type Category = {
   group_name: string;
   cost_type: CostType;
   controllability: Controllability;
+  color: string;
+  emoji: string;
 };
 
 export type CostTypeSlice = {
@@ -608,6 +632,28 @@ export async function applyRules(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ scope, dry_run: dryRun }),
+    })
+  );
+}
+
+export async function getCategoryDetail(
+  category: string,
+  month: string
+): Promise<CategoryDetail> {
+  const qs = `?category=${encodeURIComponent(category)}&month=${month}`;
+  return asJson(await fetch(`${API_BASE}/dashboard/category-detail${qs}`));
+}
+
+export async function setCategoryAppearance(
+  categoryId: number,
+  color: string,
+  emoji: string
+): Promise<Category> {
+  return asJson(
+    await fetch(`${API_BASE}/categories/${categoryId}/appearance`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ color, emoji }),
     })
   );
 }

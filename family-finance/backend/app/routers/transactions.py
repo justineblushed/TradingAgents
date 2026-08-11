@@ -25,6 +25,7 @@ def _to_out(r: Transaction) -> TransactionOut:
 def list_transactions(
     month: str | None = None,
     tag: str | None = None,
+    category: str | None = None,
     db: Session = Depends(get_db),
 ):
     query = db.query(Transaction).options(
@@ -35,6 +36,13 @@ def list_transactions(
         query = query.filter(Transaction.trans_date >= start, Transaction.trans_date < end)
     if tag:
         query = query.filter(Transaction.tags.any(Tag.name == tag))
+    if category == "Uncategorized":
+        query = query.filter(Transaction.category_id.is_(None))
+    elif category:
+        record = db.query(Category).filter(Category.name == category).first()
+        if record is None:
+            raise HTTPException(404, f"No category named {category!r}")
+        query = query.filter(Transaction.category_id == record.id)
     rows = query.order_by(Transaction.trans_date).all()
     return [_to_out(r) for r in rows]
 

@@ -19,6 +19,22 @@ machine running the backend.
   edit categories inline → confirm import.
 - Self-service categories (`/categories` page): add/edit keywords/delete,
   each one tagged `expense`, `income`, or `transfer`.
+- **Category drill-down** (`/categories/<name>`): click any bar in the
+  dashboard's Category Breakdown (or a category name on the Categories
+  page) to see every transaction behind it, the month's total, how that
+  compares to the category's own typical month and to its budget, and a
+  12-month trend you can click to jump between months. The drill-down
+  total is computed the same way the chart is — transfers excluded,
+  refunds netted — so the two can never disagree. Empty months are
+  labelled as "no statement imported", which is not the same claim as
+  "spent nothing".
+- **Category colour and emoji**: every category carries its own colour and
+  optional emoji, editable on the Categories page. Hue tracks the group
+  (Housing indigo, Food green, Transportation cyan …) and shade separates
+  categories within it, so the pie reads at a glance. Deliberately not a
+  rotating chart palette — a colour has to mean the same category
+  everywhere, or "the blue slice" changes meaning whenever spending
+  reorders the chart.
 - **Auto-categorization rules** (`/rules` page): a rule fires when its
   keyword appears in the description, optionally narrowed by an amount
   range and/or a specific account — so the same merchant can mean two

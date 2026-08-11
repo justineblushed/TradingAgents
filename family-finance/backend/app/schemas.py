@@ -189,9 +189,16 @@ class CategoryOut(BaseModel):
     group_name: str = ""
     cost_type: str = "variable"
     controllability: str = "medium"
+    color: str = ""
+    emoji: str = ""
 
     class Config:
         from_attributes = True
+
+
+class CategoryAppearanceUpdate(BaseModel):
+    color: str
+    emoji: str = ""
 
 
 class CategoryBudgetUpdate(BaseModel):
@@ -424,6 +431,33 @@ class AccountCoverage(BaseModel):
 class CoverageSummary(BaseModel):
     accounts: list[AccountCoverage]
     total_missing: int
+
+
+class CategoryMonthPoint(BaseModel):
+    month: str
+    total: float
+    is_current: bool = False
+
+
+class CategoryDetail(BaseModel):
+    """One category, one month, plus enough history to judge whether that
+    month was unusual. Totals net refunds against the category the same way
+    the dashboard does, so drilling in never contradicts the chart you
+    clicked from."""
+
+    category: str
+    kind: str
+    group_name: str
+    color: str = ""
+    emoji: str = ""
+    month: str
+    total: float
+    transaction_count: int
+    monthly_budget: float | None = None
+    over_budget: float | None = None
+    average_of_history: float | None = None  # other months shown, excluding this one
+    history: list[CategoryMonthPoint] = []
+    transactions: list[TransactionOut] = []
 
 
 class NextPayday(BaseModel):
