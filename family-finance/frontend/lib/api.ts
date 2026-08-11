@@ -56,6 +56,96 @@ export type DashboardSummary = {
   by_group: Record<string, number>;
 };
 
+export type Rule = {
+  id: number;
+  keyword: string;
+  category: string;
+  category_id: number;
+  min_amount: number | null;
+  max_amount: number | null;
+  account_id: number | null;
+  account_name: string;
+  priority: number;
+  tags: string[];
+  match_count: number;
+};
+
+export type RuleInput = {
+  keyword: string;
+  category: string;
+  min_amount: number | null;
+  max_amount: number | null;
+  account_id: number | null;
+  priority: number;
+  tags: string[];
+};
+
+export type RuleScope = "uncategorized" | "rule" | "all";
+
+export const RULE_SCOPE_LABELS: Record<RuleScope, string> = {
+  uncategorized: "Only uncategorized transactions",
+  rule: "Also revise ones the rules filed before",
+  all: "Everything, including categories I set by hand",
+};
+
+export type RuleApplyChange = {
+  transaction_id: number;
+  trans_date: string;
+  description: string;
+  amount: number;
+  account_name: string;
+  from_category: string | null;
+  from_source: string | null;
+  to_category: string;
+  matched_keyword: string;
+  tags_added: string[];
+};
+
+export type RuleApplyResult = {
+  dry_run: boolean;
+  scope: RuleScope;
+  considered: number;
+  changed: number;
+  unchanged: number;
+  unmatched: number;
+  protected_manual: number;
+  changes: RuleApplyChange[];
+};
+
+export type NextPayday = {
+  pay_date: string;
+  days_away: number;
+  expected_net: number | null;
+  employer: string;
+  basis: string;
+};
+
+export type UpcomingBill = {
+  description: string;
+  category: string | null;
+  account_name: string;
+  expected_date: string;
+  days_away: number;
+  expected_amount: number;
+  amount_low: number;
+  amount_high: number;
+  amount_varies: boolean;
+  cadence: string;
+  occurrences: number;
+  basis: string;
+  overdue: boolean;
+};
+
+export type UpcomingSummary = {
+  as_of: string;
+  horizon_days: number;
+  next_payday: NextPayday | null;
+  payday_hint: string;
+  bills: UpcomingBill[];
+  bills_total: number;
+  bills_hint: string;
+};
+
 export type CreditCardSummary = {
   account_id: number;
   name: string;
@@ -479,6 +569,52 @@ export async function getDashboardSummary(month?: string): Promise<DashboardSumm
 export async function getSpendingControl(month?: string): Promise<SpendingControl> {
   const qs = month ? `?month=${month}` : "";
   return asJson(await fetch(`${API_BASE}/dashboard/spending-control${qs}`));
+}
+
+export async function listRules(): Promise<Rule[]> {
+  return asJson(await fetch(`${API_BASE}/rules`));
+}
+
+export async function createRule(payload: RuleInput): Promise<Rule> {
+  return asJson(
+    await fetch(`${API_BASE}/rules`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+  );
+}
+
+export async function updateRule(ruleId: number, payload: RuleInput): Promise<Rule> {
+  return asJson(
+    await fetch(`${API_BASE}/rules/${ruleId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+  );
+}
+
+export async function deleteRule(ruleId: number): Promise<void> {
+  await asJson(await fetch(`${API_BASE}/rules/${ruleId}`, { method: "DELETE" }));
+}
+
+export async function applyRules(
+  scope: RuleScope,
+  dryRun: boolean
+): Promise<RuleApplyResult> {
+  return asJson(
+    await fetch(`${API_BASE}/rules/apply`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scope, dry_run: dryRun }),
+    })
+  );
+}
+
+export async function getUpcoming(horizonDays?: number): Promise<UpcomingSummary> {
+  const qs = horizonDays ? `?horizon_days=${horizonDays}` : "";
+  return asJson(await fetch(`${API_BASE}/dashboard/upcoming${qs}`));
 }
 
 export async function updateCategoryClassification(

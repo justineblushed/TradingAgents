@@ -10,9 +10,16 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
-from app.categorize import seed_default_categories, suggest_category
+from app.categorize import match_rule, seed_default_categories, suggest_category
 from app.db import get_db
-from app.models import Account, Category, Statement, Transaction
+from app.models import (
+    Account,
+    Category,
+    CategoryRule,
+    CategorySource,
+    Statement,
+    Transaction,
+)
 from app.parsers.creditcard_statement import parse_credit_card_statement
 from app.parsers.csv_statement import parse_csv_statement
 from app.schemas import ImportRequest, ParsedTransaction, StatementPreview
@@ -57,7 +64,9 @@ async def preview_statement(
         if t.category_hint:
             suggested = known.get(t.category_hint.strip().lower())
         if suggested is None:
-            suggested = suggest_category(db, t.description)
+            # The account isn't picked until the confirm step, so
+            # account-scoped rules can't apply here; amount-scoped ones can.
+            suggested = suggest_category(db, t.description, amount=t.amount)
         transactions.append(
             ParsedTransaction(
                 trans_date=t.trans_date,
@@ -145,23 +154,38 @@ def confirm_statement(payload: ImportRequest, db: Session = Depends(get_db)):
     db.flush()
 
     categories_by_name = {c.name: c for c in db.query(Category).all()}
+    rules = db.query(CategoryRule).all()
 
     for txn in to_import:
+        # Re-run the rules now that the account is known — account-scoped
+        # rules couldn't be evaluated during preview.
+        matched = match_rule(rules, txn.description, txn.amount, account.id)
+        rule_name = matched.category.name if matched else None
+
+        chosen = txn.suggested_category or rule_name
         category_id = None
-        if txn.suggested_category and txn.suggested_category in categories_by_name:
-            category_id = categories_by_name[txn.suggested_category].id
-        db.add(
-            Transaction(
-                account_id=account.id,
-                statement_id=statement.id,
-                category_id=category_id,
-                trans_date=txn.trans_date,
-                post_date=txn.post_date,
-                description=txn.description,
-                amount=txn.amount,
-                foreign_currency_note=txn.foreign_currency_note,
-            )
+        source = None
+        if chosen and chosen in categories_by_name:
+            category_id = categories_by_name[chosen].id
+            # If the saved category is what the rules would have picked
+            # anyway, it's rule-assigned and a future rule run may revise it.
+            # If the user changed it in the review table, it's theirs to keep.
+            source = CategorySource.rule if chosen == rule_name else CategorySource.manual
+
+        transaction = Transaction(
+            account_id=account.id,
+            statement_id=statement.id,
+            category_id=category_id,
+            category_source=source,
+            trans_date=txn.trans_date,
+            post_date=txn.post_date,
+            description=txn.description,
+            amount=txn.amount,
+            foreign_currency_note=txn.foreign_currency_note,
         )
+        if matched is not None and source == CategorySource.rule and matched.tags:
+            transaction.tags = list(matched.tags)
+        db.add(transaction)
 
     db.commit()
     return {

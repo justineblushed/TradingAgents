@@ -80,6 +80,42 @@ def _migrate_existing_tables() -> bool:
                 )
             )
 
+        if inspector.has_table("category_rules"):
+            cols = _column_names(inspector, "category_rules")
+            # Rules gained optional narrowing conditions. Existing rows keep
+            # NULL bounds and no account, which means "match on keyword
+            # alone" — exactly how they behaved before.
+            if "min_amount" not in cols:
+                conn.execute(
+                    text("ALTER TABLE category_rules ADD COLUMN min_amount NUMERIC(12, 2)")
+                )
+                conn.execute(
+                    text("ALTER TABLE category_rules ADD COLUMN max_amount NUMERIC(12, 2)")
+                )
+                conn.execute(
+                    text("ALTER TABLE category_rules ADD COLUMN account_id INTEGER")
+                )
+                conn.execute(
+                    text("ALTER TABLE category_rules ADD COLUMN priority INTEGER DEFAULT 0")
+                )
+
+        if inspector.has_table("transactions"):
+            cols = _column_names(inspector, "transactions")
+            if "category_source" not in cols:
+                conn.execute(
+                    text("ALTER TABLE transactions ADD COLUMN category_source VARCHAR(10)")
+                )
+                # Everything already categorized predates the distinction.
+                # Marking it "manual" is the conservative read: a retroactive
+                # rule run will leave it alone rather than quietly rewriting
+                # history the household may have curated by hand.
+                conn.execute(
+                    text(
+                        "UPDATE transactions SET category_source = 'manual' "
+                        "WHERE category_id IS NOT NULL"
+                    )
+                )
+
         if inspector.has_table("accounts"):
             cols = _column_names(inspector, "accounts")
             if "credit_limit" not in cols:

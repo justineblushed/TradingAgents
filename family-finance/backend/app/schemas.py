@@ -267,6 +267,71 @@ class SpendingControl(BaseModel):
     adjustable_months_of_history: int = 0
 
 
+class RuleOut(BaseModel):
+    id: int
+    keyword: str
+    category: str
+    category_id: int
+    min_amount: float | None = None
+    max_amount: float | None = None
+    account_id: int | None = None
+    account_name: str = ""
+    priority: int = 0
+    tags: list[str] = []
+    # How many transactions this rule currently matches — the fastest way to
+    # tell a useful rule from one that never fires or one that's far too broad.
+    match_count: int = 0
+
+
+class RuleInput(BaseModel):
+    keyword: str
+    category: str
+    min_amount: float | None = None
+    max_amount: float | None = None
+    account_id: int | None = None
+    priority: int = 0
+    tags: list[str] = []
+
+
+class RuleApplyRequest(BaseModel):
+    """Re-run the rules over transactions already imported.
+
+    `scope` decides what may be touched, in ascending order of risk:
+      - "uncategorized": only rows with no category at all (the default);
+      - "rule": also revise rows a previous rule run assigned;
+      - "all": also overwrite categories the user set by hand.
+    Manual choices are protected by default because silently undoing a
+    correction is worse than leaving a row mis-filed.
+    """
+
+    scope: str = "uncategorized"
+    dry_run: bool = True
+
+
+class RuleApplyChange(BaseModel):
+    transaction_id: int
+    trans_date: date
+    description: str
+    amount: float
+    account_name: str = ""
+    from_category: str | None = None
+    from_source: str | None = None
+    to_category: str
+    matched_keyword: str
+    tags_added: list[str] = []
+
+
+class RuleApplyResult(BaseModel):
+    dry_run: bool
+    scope: str
+    considered: int  # transactions the scope allowed us to look at
+    changed: int
+    unchanged: int  # in scope, matched a rule, already filed there
+    unmatched: int  # in scope, no rule matched
+    protected_manual: int  # skipped because the user set them by hand
+    changes: list[RuleApplyChange] = []
+
+
 class CategoryCreate(BaseModel):
     name: str
     kind: str = "expense"
@@ -359,6 +424,51 @@ class AccountCoverage(BaseModel):
 class CoverageSummary(BaseModel):
     accounts: list[AccountCoverage]
     total_missing: int
+
+
+class NextPayday(BaseModel):
+    pay_date: date
+    days_away: int
+    expected_net: float | None = None
+    employer: str = ""
+    basis: str  # how the date was projected, so it can be sanity-checked
+
+
+class UpcomingBill(BaseModel):
+    """A charge the history says is due soon. An expectation, not an invoice."""
+
+    description: str
+    category: str | None = None
+    account_name: str = ""
+    expected_date: date
+    days_away: int
+    expected_amount: float
+    amount_low: float
+    amount_high: float
+    amount_varies: bool
+    cadence: str
+    occurrences: int
+    basis: str
+    overdue: bool = False  # due date has passed with no matching charge yet
+
+
+class UpcomingSummary(BaseModel):
+    """Next payday and the bills the transaction history says are due.
+
+    Both are inferred, not scheduled: nothing here was entered as a bill.
+    A charge is only reported once it has repeated on a steady enough
+    rhythm to be worth trusting, and each one carries the evidence behind
+    it. Anything already paid this cycle is excluded rather than shown as
+    still due.
+    """
+
+    as_of: date
+    horizon_days: int
+    next_payday: NextPayday | None = None
+    payday_hint: str = ""  # why there is no payday, when there isn't one
+    bills: list[UpcomingBill] = []
+    bills_total: float = 0.0
+    bills_hint: str = ""
 
 
 class DashboardSummary(BaseModel):

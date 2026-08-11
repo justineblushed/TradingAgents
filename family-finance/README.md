@@ -19,6 +19,23 @@ machine running the backend.
   edit categories inline → confirm import.
 - Self-service categories (`/categories` page): add/edit keywords/delete,
   each one tagged `expense`, `income`, or `transfer`.
+- **Auto-categorization rules** (`/rules` page): a rule fires when its
+  keyword appears in the description, optionally narrowed by an amount
+  range and/or a specific account — so the same merchant can mean two
+  things (a small annual membership fee vs. a big grocery run) and land in
+  the right place. When several rules match, the most specific wins, with
+  an explicit priority as the tie-breaker. A rule can also attach tags.
+  Rules can be re-run over transactions already imported, always with a
+  preview first and a scope that defaults to touching only uncategorized
+  rows. Categories set by hand are recorded as such and left alone unless
+  you explicitly ask for the widest scope — a bulk re-file should never
+  silently undo a correction.
+- **Coming up** card on the dashboard: the next payday, projected from the
+  cadence of the pay stubs entered, and the recurring bills due in the next
+  30 days. Both are *inferred*, not scheduled — a charge only appears once
+  it has repeated at least three times on a steady enough rhythm, and each
+  row shows the evidence behind it. Amounts that move between cycles are
+  shown as a range rather than a single confident number.
 - **Cash flow vs. balance sheet are modeled separately, on purpose:**
   - *Cash flow* (`/dashboard`, `/transactions`): spending and income for
     a month, computed from imported transactions. Transactions in a

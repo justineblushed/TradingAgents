@@ -1,5 +1,5 @@
 from collections import defaultdict
-from datetime import datetime
+from datetime import date as date_type, datetime, timedelta
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session, joinedload
@@ -14,16 +14,21 @@ from app.models import (
     CategoryKind,
     Controllability,
     CostType,
+    PayStub,
     Transaction,
 )
 from app.networth import balance_for_account
+from app.recurring import detect_recurring, next_payday
 from app.schemas import (
     AreaToWatch,
     BudgetVariance,
     CostTypeSlice,
     CreditCardSummary,
     DashboardSummary,
+    NextPayday,
     SpendingControl,
+    UpcomingBill,
+    UpcomingSummary,
 )
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -281,3 +286,122 @@ def credit_cards(month: str | None = None, db: Session = Depends(get_db)):
             )
         )
     return out
+
+
+# How much history to read when looking for repeating charges. Long enough to
+# catch a quarterly bill three times over, short enough that a subscription
+# cancelled two years ago doesn't resurface.
+_RECURRING_LOOKBACK_DAYS = 800
+
+
+@router.get("/upcoming", response_model=UpcomingSummary)
+def upcoming(
+    horizon_days: int = 30,
+    today: date_type | None = None,
+    db: Session = Depends(get_db),
+):
+    """What's coming: next payday, and the bills history says are due.
+
+    Nothing here was entered as a schedule — both halves are inferred, the
+    payday from pay stub cadence and the bills from repeating charges. Each
+    carries the evidence it came from so the household can tell a real
+    obligation from a coincidence.
+    """
+    today = today or date_type.today()
+    horizon_days = max(1, min(horizon_days, 120))
+    horizon = today + timedelta(days=horizon_days)
+
+    # --- next payday ---------------------------------------------------
+    payday: NextPayday | None = None
+    payday_hint = ""
+    stubs = db.query(PayStub).order_by(PayStub.pay_date).all()
+    projected = next_payday([s.pay_date for s in stubs], today)
+    if projected is not None:
+        pay_date, basis, _gap = projected
+        # Expect what the recent stubs actually paid, not an all-time average
+        # — a raise or a change in hours shouldn't be diluted by last year.
+        recent = [float(s.net_pay) for s in stubs[-3:] if float(s.net_pay) > 0]
+        by_employer = [s.employer for s in stubs if s.employer]
+        payday = NextPayday(
+            pay_date=pay_date,
+            days_away=(pay_date - today).days,
+            expected_net=round(sum(recent) / len(recent), 2) if recent else None,
+            employer=by_employer[-1] if by_employer else "",
+            basis=basis,
+        )
+    elif len(stubs) == 1:
+        payday_hint = (
+            "One pay stub so far — add the next one and the pay rhythm can "
+            "be worked out."
+        )
+    else:
+        payday_hint = "Add pay stubs on the Payroll page to project your next payday."
+
+    # --- upcoming bills --------------------------------------------------
+    since = today - timedelta(days=_RECURRING_LOOKBACK_DAYS)
+    rows = (
+        db.query(Transaction)
+        .options(joinedload(Transaction.category), joinedload(Transaction.account))
+        .filter(Transaction.trans_date >= since)
+        .all()
+    )
+    series = detect_recurring(
+        [
+            {
+                "description": r.description,
+                "amount": float(r.amount),
+                "trans_date": r.trans_date,
+                "account_id": r.account_id,
+                "account_name": r.account.name if r.account else "",
+                "category": r.category.name if r.category else None,
+                "kind": r.category.kind.value if r.category else "expense",
+            }
+            for r in rows
+        ],
+        today=today,
+    )
+
+    bills: list[UpcomingBill] = []
+    for s in series:
+        # Income has its own card above; a refund series isn't a bill either.
+        if s.kind == "income" or s.typical_amount <= 0:
+            continue
+        if s.next_date > horizon:
+            continue
+        bills.append(
+            UpcomingBill(
+                description=s.description,
+                category=s.category,
+                account_name=s.account_name,
+                expected_date=s.next_date,
+                days_away=(s.next_date - today).days,
+                expected_amount=s.typical_amount,
+                amount_low=s.amount_low,
+                amount_high=s.amount_high,
+                amount_varies=s.amount_varies,
+                cadence=s.cadence,
+                occurrences=s.occurrences,
+                basis=s.basis,
+                overdue=s.next_date < today,
+            )
+        )
+
+    if not bills:
+        bills_hint = (
+            "No repeating charges found yet. A bill shows up here once it has "
+            "been imported at least three times on a steady rhythm."
+            if rows
+            else "Import some statements and repeating bills will be spotted here."
+        )
+    else:
+        bills_hint = ""
+
+    return UpcomingSummary(
+        as_of=today,
+        horizon_days=horizon_days,
+        next_payday=payday,
+        payday_hint=payday_hint,
+        bills=bills,
+        bills_total=round(sum(b.expected_amount for b in bills), 2),
+        bills_hint=bills_hint,
+    )

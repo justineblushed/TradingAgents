@@ -158,9 +158,67 @@ def seed_default_categories(db: Session) -> None:
         db.commit()
 
 
-def suggest_category(db: Session, description: str) -> str | None:
-    lowered = description.lower()
-    for rule in db.query(CategoryRule).all():
-        if rule.keyword in lowered:
-            return rule.category.name
-    return None
+def rule_matches(
+    rule: CategoryRule,
+    description: str,
+    amount: float | None = None,
+    account_id: int | None = None,
+) -> bool:
+    """All of a rule's conditions must hold. Absent conditions are ignored.
+
+    Amount bounds compare against the magnitude, so one rule covers both a
+    charge and its refund rather than needing a mirrored negative range.
+    """
+    if not rule.keyword or rule.keyword.lower() not in description.lower():
+        return False
+    if rule.account_id is not None and rule.account_id != account_id:
+        return False
+    if rule.min_amount is not None or rule.max_amount is not None:
+        if amount is None:
+            return False
+        magnitude = abs(amount)
+        if rule.min_amount is not None and magnitude < float(rule.min_amount):
+            return False
+        if rule.max_amount is not None and magnitude > float(rule.max_amount):
+            return False
+    return True
+
+
+def rule_specificity(rule: CategoryRule) -> tuple[int, int, int]:
+    """Sort key for picking a winner among matching rules.
+
+    A rule that pins down more about a transaction should beat a broader
+    one: "COSTCO between $0 and $80 on the Visa" is a deliberate carve-out
+    from a plain "costco" rule and would be pointless if the general rule
+    won. Ties fall back to the longer keyword — "costco gas" is a more
+    considered match than "costco" — and then to explicit priority.
+    """
+    conditions = sum(
+        1
+        for value in (rule.min_amount, rule.max_amount, rule.account_id)
+        if value is not None
+    )
+    return (rule.priority or 0, conditions, len(rule.keyword or ""))
+
+
+def match_rule(
+    rules: list[CategoryRule],
+    description: str,
+    amount: float | None = None,
+    account_id: int | None = None,
+) -> CategoryRule | None:
+    """The most specific rule that matches, or None."""
+    matching = [r for r in rules if rule_matches(r, description, amount, account_id)]
+    if not matching:
+        return None
+    return max(matching, key=rule_specificity)
+
+
+def suggest_category(
+    db: Session,
+    description: str,
+    amount: float | None = None,
+    account_id: int | None = None,
+) -> str | None:
+    rule = match_rule(db.query(CategoryRule).all(), description, amount, account_id)
+    return rule.category.name if rule else None

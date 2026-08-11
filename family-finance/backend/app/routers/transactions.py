@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.dateutil import month_bounds
 from app.db import get_db
-from app.models import Category, Tag, Transaction
+from app.models import Category, CategorySource, Tag, Transaction
 from app.schemas import TransactionOut, TransactionTagsUpdate
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
@@ -48,6 +48,9 @@ def set_category(transaction_id: int, category_name: str, db: Session = Depends(
     if category is None:
         raise HTTPException(404, "Category not found")
     transaction.category_id = category.id
+    # Choosing a category by hand pins it: a later retroactive rule run will
+    # skip this row rather than overwrite the correction.
+    transaction.category_source = CategorySource.manual
     db.commit()
     return {"ok": True}
 

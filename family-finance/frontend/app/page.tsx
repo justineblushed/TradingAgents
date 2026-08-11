@@ -23,10 +23,12 @@ import {
   CreditCardSummary,
   DashboardSummary,
   SpendingControl,
+  UpcomingSummary,
   getCreditCardSummaries,
   getDashboardSummary,
   getSpendingControl,
   getStatementCoverage,
+  getUpcoming,
 } from "@/lib/api";
 import { formatCurrency, formatSignedCurrency } from "@/lib/format";
 
@@ -43,12 +45,16 @@ export default function DashboardPage() {
   const [cards, setCards] = useState<CreditCardSummary[] | null>(null);
   const [control, setControl] = useState<SpendingControl | null>(null);
   const [coverage, setCoverage] = useState<CoverageSummary | null>(null);
+  const [upcoming, setUpcoming] = useState<UpcomingSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Missing-statement check is independent of the selected month.
+    // Both of these are about today, not the month being browsed.
     getStatementCoverage()
       .then(setCoverage)
+      .catch(() => {});
+    getUpcoming()
+      .then(setUpcoming)
       .catch(() => {});
   }, []);
 
@@ -133,6 +139,8 @@ export default function DashboardPage() {
             Credit card payments aren't counted here — paying off your own card
             is a transfer between your own accounts, not spending or income.
           </p>
+
+          {upcoming && <ComingUpCard upcoming={upcoming} />}
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <ChartCard title="Spending by Group">
@@ -338,6 +346,145 @@ function SpendingControlPanel({ control }: { control: SpendingControl }) {
           </p>
         </div>
       )}
+    </div>
+  );
+}
+
+function relativeDay(days: number): string {
+  if (days < 0) return `${-days} day${days === -1 ? "" : "s"} ago`;
+  if (days === 0) return "today";
+  if (days === 1) return "tomorrow";
+  return `in ${days} days`;
+}
+
+/** Forward-looking card: the next paycheque and the bills history says are
+ *  coming. Both are inferred rather than scheduled, so each row carries the
+ *  evidence behind it — a projection presented as a certainty would be worse
+ *  than no projection at all. */
+function ComingUpCard({ upcoming }: { upcoming: UpcomingSummary }) {
+  const { next_payday: payday, bills } = upcoming;
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-sm font-medium text-slate-600">Coming up</h2>
+        <span className="text-xs text-slate-400">
+          next {upcoming.horizon_days} days
+        </span>
+      </div>
+
+      <div className="mt-3 grid gap-4 md:grid-cols-2">
+        {/* Next payday */}
+        <div className="rounded-lg bg-green-50 p-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-green-700">
+            Next payday
+          </p>
+          {payday ? (
+            <>
+              <p className="mt-1 text-xl font-semibold text-slate-800">
+                {payday.pay_date}{" "}
+                <span className="text-sm font-normal text-slate-500">
+                  · {relativeDay(payday.days_away)}
+                </span>
+              </p>
+              {payday.expected_net !== null && (
+                <p className="text-sm text-slate-600">
+                  expecting ~{formatCurrency(payday.expected_net)} net
+                  {payday.employer && ` from ${payday.employer}`}
+                </p>
+              )}
+              <p className="mt-1 text-xs text-slate-400">
+                Projected from your pay stubs ({payday.basis}) — not a
+                confirmed deposit date.
+              </p>
+            </>
+          ) : (
+            <p className="mt-1 text-sm text-slate-500">
+              {upcoming.payday_hint}{" "}
+              <Link
+                href="/payroll"
+                className="font-medium text-brand-600 hover:text-brand-700"
+              >
+                Payroll →
+              </Link>
+            </p>
+          )}
+        </div>
+
+        {/* Bills total */}
+        <div className="rounded-lg bg-slate-50 p-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+            Bills due
+          </p>
+          {bills.length > 0 ? (
+            <>
+              <p className="mt-1 text-xl font-semibold text-slate-800">
+                {formatCurrency(upcoming.bills_total)}
+              </p>
+              <p className="text-sm text-slate-600">
+                across {bills.length} recurring charge
+                {bills.length === 1 ? "" : "s"}
+              </p>
+              {payday?.expected_net != null && (
+                <p className="mt-1 text-xs text-slate-400">
+                  {upcoming.bills_total <= payday.expected_net
+                    ? "Covered by the next paycheque on its own."
+                    : `${formatCurrency(
+                        upcoming.bills_total - payday.expected_net
+                      )} more than the next paycheque — the rest comes from your balances.`}
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="mt-1 text-sm text-slate-500">{upcoming.bills_hint}</p>
+          )}
+        </div>
+      </div>
+
+      {bills.length > 0 && (
+        <div className="mt-4 divide-y divide-slate-100 border-t border-slate-100 pt-1">
+          {bills.map((bill) => (
+            <div
+              key={`${bill.description}-${bill.expected_date}`}
+              className="flex flex-wrap items-center justify-between gap-2 py-2"
+            >
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-slate-700">
+                  {bill.description}
+                  {bill.overdue && (
+                    <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                      expected {relativeDay(bill.days_away)}
+                    </span>
+                  )}
+                </p>
+                <p className="text-xs text-slate-400">
+                  {bill.category ?? "Uncategorized"} · {bill.account_name} ·{" "}
+                  {bill.basis}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-sm font-semibold text-slate-800">
+                  {bill.amount_varies ? "~" : ""}
+                  {formatCurrency(bill.expected_amount)}
+                </p>
+                <p className="text-xs text-slate-400">
+                  {bill.overdue ? "was due" : relativeDay(bill.days_away)}
+                  {bill.amount_varies &&
+                    ` · ranges ${formatCurrency(
+                      bill.amount_low
+                    )}–${formatCurrency(bill.amount_high)}`}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <p className="mt-3 text-xs text-slate-400">
+        Nothing here was entered as a bill — these are charges spotted
+        repeating in your imported transactions, so the amounts are
+        expectations from history rather than invoices.
+      </p>
     </div>
   );
 }

@@ -11,6 +11,7 @@ from app.routers import (
     healthscore,
     networth,
     payroll,
+    rules,
     statements,
     tags,
     transactions,
@@ -43,6 +44,7 @@ app.include_router(coverage.router)
 app.include_router(healthscore.router)
 app.include_router(networth.router)
 app.include_router(payroll.router)
+app.include_router(rules.router)
 app.include_router(statements.router)
 app.include_router(tags.router)
 app.include_router(transactions.router)

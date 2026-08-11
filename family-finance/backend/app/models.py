@@ -26,6 +26,14 @@ transaction_tags = Table(
     Column("tag_id", ForeignKey("tags.id"), primary_key=True),
 )
 
+# Tags a rule applies automatically when it matches.
+category_rule_tags = Table(
+    "category_rule_tags",
+    Base.metadata,
+    Column("rule_id", ForeignKey("category_rules.id"), primary_key=True),
+    Column("tag_id", ForeignKey("tags.id"), primary_key=True),
+)
+
 
 class AccountType(str, enum.Enum):
     # Assets
@@ -158,7 +166,14 @@ class Category(Base):
 
 
 class CategoryRule(Base):
-    """Keyword -> category mapping used by the auto-categorizer."""
+    """A condition that files a transaction into a category automatically.
+
+    The keyword is the only required condition; the rest narrow it. That
+    matters because one merchant can mean two different things: a $9.99
+    charge from a warehouse store is a membership fee, a $240 one is
+    groceries. Conditions are ANDed, and the most specific matching rule
+    wins (see app.categorize.match_category).
+    """
 
     __tablename__ = "category_rules"
 
@@ -166,7 +181,22 @@ class CategoryRule(Base):
     keyword: Mapped[str] = mapped_column(String(120))
     category_id: Mapped[int] = mapped_column(ForeignKey("categories.id"))
 
+    # Optional narrowing conditions. Null means "don't care".
+    # Bounds are inclusive and compared against the absolute amount, so a
+    # rule reads the same whether it targets a charge or a refund.
+    min_amount: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
+    max_amount: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
+    account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("accounts.id"), nullable=True
+    )
+    # Manual tie-breaker for equally specific rules; higher wins.
+    priority: Mapped[int] = mapped_column(default=0)
+
     category: Mapped["Category"] = relationship(back_populates="rules")
+    account: Mapped["Account | None"] = relationship()
+    # Tags applied alongside the category when this rule matches — lets
+    # "every charge at this vet gets tagged #pets" happen without hand-tagging.
+    tags: Mapped[list["Tag"]] = relationship(secondary="category_rule_tags")
 
 
 class Tag(Base):
@@ -271,6 +301,18 @@ class Statement(Base):
     account: Mapped["Account"] = relationship()
 
 
+class CategorySource(str, enum.Enum):
+    """Who decided this transaction's category.
+
+    Recorded so a retroactive rule run can leave hand-corrections alone.
+    Without it, re-running the rules would silently undo every fix the
+    household made by hand — the exact opposite of helpful.
+    """
+
+    rule = "rule"  # assigned by the auto-categorizer
+    manual = "manual"  # the user chose it
+
+
 class Transaction(Base):
     __tablename__ = "transactions"
 
@@ -281,6 +323,9 @@ class Transaction(Base):
     )
     category_id: Mapped[int | None] = mapped_column(
         ForeignKey("categories.id"), nullable=True
+    )
+    category_source: Mapped[CategorySource | None] = mapped_column(
+        Enum(CategorySource), nullable=True
     )
 
     trans_date: Mapped[date] = mapped_column(Date)
