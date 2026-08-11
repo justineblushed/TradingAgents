@@ -274,6 +274,29 @@ class SpendingControl(BaseModel):
     adjustable_months_of_history: int = 0
 
 
+class SignIssue(BaseModel):
+    """A transaction filed under an income category but stored with a
+    positive (money-out) amount instead of negative (money-in) — the one
+    mismatch that actually drags income totals negative everywhere they're
+    shown, rather than just looking odd on its own."""
+
+    id: int
+    trans_date: date
+    description: str
+    amount: float
+    category: str
+    account_name: str
+
+
+class SignIssueFixRequest(BaseModel):
+    transaction_ids: list[int]
+
+
+class SignIssueFixResult(BaseModel):
+    fixed: int
+    already_ok: int = 0  # requested but no longer a sign issue by the time this ran
+
+
 class RuleOut(BaseModel):
     id: int
     keyword: str

@@ -16,6 +16,7 @@ import {
 } from "recharts";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import SignIssueBanner from "./sign-issue-banner";
 import {
   AreaToWatch,
   CONTROL_LABELS,
@@ -187,6 +188,8 @@ export default function DashboardPage() {
           </Link>
         </div>
       )}
+
+      {summary && summary.total_income < 0 && <SignIssueBanner />}
 
       {!summary && !error && (
         <p className="py-16 text-center text-sm text-slate-400">Loading…</p>

@@ -692,6 +692,36 @@ export async function getSankey(month?: string): Promise<SankeySummary> {
   return asJson(await fetch(`${API_BASE}/dashboard/sankey${qs}`));
 }
 
+export type SignIssue = {
+  id: number;
+  trans_date: string;
+  description: string;
+  amount: number;
+  category: string;
+  account_name: string;
+};
+
+export type SignIssueFixResult = {
+  fixed: number;
+  already_ok: number;
+};
+
+export async function listSignIssues(): Promise<SignIssue[]> {
+  return asJson(await fetch(`${API_BASE}/transactions/sign-issues`));
+}
+
+export async function fixSignIssues(
+  transactionIds: number[]
+): Promise<SignIssueFixResult> {
+  return asJson(
+    await fetch(`${API_BASE}/transactions/sign-issues/fix`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ transaction_ids: transactionIds }),
+    })
+  );
+}
+
 export async function updateCategoryClassification(
   categoryId: number,
   costType: CostType,

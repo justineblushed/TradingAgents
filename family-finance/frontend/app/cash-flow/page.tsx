@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ResponsiveContainer, Sankey, Tooltip } from "recharts";
 import { SankeySummary, getSankey } from "@/lib/api";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatSignedCurrency } from "@/lib/format";
+import SignIssueBanner from "../sign-issue-banner";
 
 function currentMonth(): string {
   const now = new Date();
@@ -149,17 +150,19 @@ export default function CashFlowPage() {
 
       {data && (
         <>
+          {data.total_income < 0 && <SignIssueBanner />}
+
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
               <p className="text-xs text-slate-500">Income</p>
               <p className="text-xl font-bold text-green-600">
-                {formatCurrency(data.total_income)}
+                {formatSignedCurrency(data.total_income)}
               </p>
             </div>
             <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
               <p className="text-xs text-slate-500">Spending</p>
               <p className="text-xl font-bold text-red-600">
-                {formatCurrency(data.total_spending)}
+                {formatSignedCurrency(data.total_spending)}
               </p>
             </div>
             <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">

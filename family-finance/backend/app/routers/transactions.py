@@ -3,8 +3,14 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.dateutil import month_bounds
 from app.db import get_db
-from app.models import Category, CategorySource, Tag, Transaction
-from app.schemas import TransactionOut, TransactionTagsUpdate
+from app.models import Category, CategoryKind, CategorySource, Tag, Transaction
+from app.schemas import (
+    SignIssue,
+    SignIssueFixRequest,
+    SignIssueFixResult,
+    TransactionOut,
+    TransactionTagsUpdate,
+)
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 
@@ -91,3 +97,60 @@ def set_tags(
     db.commit()
     db.refresh(transaction)
     return _to_out(transaction)
+
+
+@router.get("/sign-issues", response_model=list[SignIssue])
+def list_sign_issues(db: Session = Depends(get_db)):
+    """Income-kind transactions stored with a positive amount.
+
+    This app's convention is negative = money in; every place that
+    reports income (dashboard, cash flow, category drill-down) negates a
+    category's raw total to display it as a positive number. A
+    transaction stored the wrong way round doesn't just look odd on its
+    own — it drags every one of those totals toward zero or negative,
+    usually because it was imported before a CSV's own sign convention
+    was reconciled against this app's. This finds every such row so it
+    can be corrected explicitly rather than guessed at.
+    """
+    rows = (
+        db.query(Transaction)
+        .join(Category)
+        .options(joinedload(Transaction.category), joinedload(Transaction.account))
+        .filter(Category.kind == CategoryKind.income, Transaction.amount > 0)
+        .order_by(Transaction.trans_date.desc())
+        .all()
+    )
+    return [
+        SignIssue(
+            id=r.id,
+            trans_date=r.trans_date,
+            description=r.description,
+            amount=float(r.amount),
+            category=r.category.name,
+            account_name=r.account.name if r.account else "",
+        )
+        for r in rows
+    ]
+
+
+@router.post("/sign-issues/fix", response_model=SignIssueFixResult)
+def fix_sign_issues(payload: SignIssueFixRequest, db: Session = Depends(get_db)):
+    if not payload.transaction_ids:
+        raise HTTPException(400, "No transactions selected")
+    fixed = 0
+    already_ok = 0
+    for transaction_id in payload.transaction_ids:
+        txn = db.get(Transaction, transaction_id)
+        if txn is None:
+            continue
+        # Re-check rather than trust the caller's list blindly — something
+        # else may have already fixed or recategorized this row since it
+        # was listed, and flipping a now-correct row would just reintroduce
+        # the bug the other way.
+        if txn.category and txn.category.kind == CategoryKind.income and txn.amount > 0:
+            txn.amount = -txn.amount
+            fixed += 1
+        else:
+            already_ok += 1
+    db.commit()
+    return SignIssueFixResult(fixed=fixed, already_ok=already_ok)

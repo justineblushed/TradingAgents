@@ -61,6 +61,19 @@ machine running the backend.
   exceeds income, there's no fabricated flow into savings — a
   negative-value link isn't meaningful in a Sankey — the gap is reported
   as a number instead.
+- **Sign Check** (`/sign-check`): finds transactions filed under an income
+  category (Employment Income, Rental Income, ...) but stored with a
+  positive amount instead of the negative this app's convention expects.
+  One of these doesn't just look odd on its own — it drags the income
+  total on the Dashboard, Cash Flow, and that category's drill-down
+  toward zero or negative, since all three negate a category's raw total
+  to show it as a positive number. Usually left over from a statement
+  imported before a CSV's sign convention was reconciled, or a manual
+  recategorization onto a row whose amount didn't get reconsidered.
+  Dashboard and Cash Flow show a banner linking here whenever their
+  income figure is actually negative; each flagged row can be fixed
+  individually or in bulk, and the fix re-validates every row itself
+  rather than trusting a stale list.
 - **Cash flow vs. balance sheet are modeled separately, on purpose:**
   - *Cash flow* (`/dashboard`, `/transactions`): spending and income for
     a month, computed from imported transactions. Transactions in a
