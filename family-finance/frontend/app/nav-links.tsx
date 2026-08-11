@@ -8,6 +8,7 @@ const LINKS = [
   { href: "/health", label: "Health" },
   { href: "/net-worth", label: "Net Worth" },
   { href: "/transactions", label: "Transactions" },
+  { href: "/payroll", label: "Payroll" },
   { href: "/categories", label: "Categories" },
   { href: "/statement-log", label: "Statement Log" },
 ];

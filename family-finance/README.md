@@ -31,6 +31,21 @@ machine running the backend.
     account) or, for credit cards with statements imported but no
     snapshot yet, an estimate from the running transaction total
     (clearly labeled "estimated").
+- **Payroll & tax** (`/payroll`): a bank statement only shows the net
+  deposit, which hides everything you actually paid. Pay stubs are
+  uploaded (best-effort PDF read, every field editable before saving) or
+  entered by hand, capturing gross pay, income tax, CPP, EI, RRSP,
+  pension and union dues. From those it derives an annualized income
+  (using the stubs' own pay cadence, not an assumed biweekly), your
+  marginal and average tax rate, the federal/provincial brackets you sit
+  in, whether withholding is running ahead or behind, and estimated RRSP
+  room including the tax saving from contributing the remainder.
+  Tax rates are **data, not code**: `tax_brackets` / `tax_year_settings`
+  are seeded with 2025 federal + Manitoba figures and edited in the app,
+  since the CRA indexes them annually. Every derived figure is labeled an
+  estimate with a "verify against canada.ca" note — it can't see other
+  income, credits beyond the basic personal amount, spousal transfers, or
+  your CRA carry-forward (which you can enter from your NOA).
 - Accounts cover both sides of the balance sheet: cash, chequing,
   savings, investment, TFSA, RRSP, RESP (assets) and credit card,
   mortgage, car loan (liabilities). Credit cards optionally track a

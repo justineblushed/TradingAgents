@@ -40,6 +40,128 @@ class TransactionOut(BaseModel):
         from_attributes = True
 
 
+class PayStubBase(BaseModel):
+    employer: str = ""
+    earner: str = ""
+    pay_date: date
+    period_start: date | None = None
+    period_end: date | None = None
+    gross_pay: float = 0
+    income_tax: float = 0
+    cpp: float = 0
+    ei: float = 0
+    rrsp_employee: float = 0
+    pension_employee: float = 0
+    union_dues: float = 0
+    other_deductions: float = 0
+    net_pay: float = 0
+    employer_rrsp: float = 0
+    employer_pension: float = 0
+    notes: str = ""
+
+
+class PayStubCreate(PayStubBase):
+    pass
+
+
+class PayStubOut(PayStubBase):
+    id: int
+    total_deductions: float = 0
+
+    class Config:
+        from_attributes = True
+
+
+class PayStubDraftOut(BaseModel):
+    """Parsed pre-fill — always reviewed by the user before saving."""
+
+    employer: str = ""
+    pay_date: date | None = None
+    period_start: date | None = None
+    period_end: date | None = None
+    gross_pay: float = 0
+    income_tax: float = 0
+    cpp: float = 0
+    ei: float = 0
+    rrsp_employee: float = 0
+    pension_employee: float = 0
+    union_dues: float = 0
+    other_deductions: float = 0
+    net_pay: float = 0
+    employer_rrsp: float = 0
+    employer_pension: float = 0
+    warnings: list[str] = []
+    matched_fields: list[str] = []
+
+
+class TaxBracketOut(BaseModel):
+    id: int
+    tax_year: int
+    jurisdiction: str
+    lower_bound: float
+    upper_bound: float | None
+    rate: float
+
+    class Config:
+        from_attributes = True
+
+
+class TaxBracketInput(BaseModel):
+    lower_bound: float
+    upper_bound: float | None = None
+    rate: float
+
+
+class TaxBracketsReplace(BaseModel):
+    tax_year: int
+    jurisdiction: str
+    brackets: list[TaxBracketInput]
+
+
+class TaxSettingOut(BaseModel):
+    tax_year: int
+    rrsp_rate: float
+    rrsp_dollar_limit: float
+    federal_basic_personal_amount: float
+    provincial_basic_personal_amount: float
+    province: str
+
+    class Config:
+        from_attributes = True
+
+
+class PayrollSummary(BaseModel):
+    """Year-to-date payroll picture plus estimated tax and RRSP position.
+
+    Everything derived here is an estimate from the stubs entered: it
+    knows nothing about other income, credits beyond the basic personal
+    amount, spousal transfers, or your CRA carry-forward unless supplied.
+    """
+
+    tax_year: int
+    stub_count: int
+    ytd_gross: float
+    ytd_income_tax: float
+    ytd_cpp: float
+    ytd_ei: float
+    ytd_rrsp: float  # withheld from pay
+    ytd_employer_rrsp: float = 0.0
+    ytd_rrsp_contributed: float = 0.0  # yours + employer match; uses up room
+    ytd_pension: float
+    ytd_other_deductions: float
+    ytd_net: float
+
+    annualized_gross: float
+    projection_basis: str  # how the annualization was derived
+
+    tax: dict
+    tax_if_rrsp_maxed: dict | None = None
+    rrsp: dict
+    withholding_delta: float | None = None  # + = over-withheld so far
+
+    rates_verified_note: str
+
+
 class TagOut(BaseModel):
     id: int
     name: str

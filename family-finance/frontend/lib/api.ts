@@ -230,6 +230,133 @@ export type Transaction = {
   tags: string[];
 };
 
+export type PayStubFields = {
+  employer: string;
+  earner: string;
+  pay_date: string;
+  period_start: string | null;
+  period_end: string | null;
+  gross_pay: number;
+  income_tax: number;
+  cpp: number;
+  ei: number;
+  rrsp_employee: number;
+  pension_employee: number;
+  union_dues: number;
+  other_deductions: number;
+  net_pay: number;
+  employer_rrsp: number;
+  employer_pension: number;
+  notes: string;
+};
+
+export type PayStub = PayStubFields & {
+  id: number;
+  total_deductions: number;
+};
+
+export type PayStubDraft = Omit<PayStubFields, "pay_date" | "earner" | "notes"> & {
+  pay_date: string | null;
+  warnings: string[];
+  matched_fields: string[];
+};
+
+/** Money amounts the user reviews and edits before a stub is saved. The
+ *  order here drives the review form and the YTD table, so the two always
+ *  agree on what a "deduction" is. */
+export const PAY_STUB_DEDUCTIONS: { key: keyof PayStubFields; label: string }[] = [
+  { key: "income_tax", label: "Income tax" },
+  { key: "cpp", label: "CPP / QPP" },
+  { key: "ei", label: "EI" },
+  { key: "rrsp_employee", label: "RRSP (yours)" },
+  { key: "pension_employee", label: "Pension (yours)" },
+  { key: "union_dues", label: "Union dues" },
+  { key: "other_deductions", label: "Other deductions" },
+];
+
+export const PAY_STUB_EMPLOYER_FIELDS: { key: keyof PayStubFields; label: string }[] = [
+  { key: "employer_rrsp", label: "Employer RRSP match" },
+  { key: "employer_pension", label: "Employer pension" },
+];
+
+export type TaxBracketHit = {
+  jurisdiction: string;
+  rate: number;
+  lower_bound: number;
+  upper_bound: number | null;
+};
+
+export type TaxEstimate = {
+  available: boolean;
+  tax_year?: number;
+  province?: string;
+  annual_gross?: number;
+  rrsp_deduction?: number;
+  taxable_income?: number;
+  federal_tax?: number;
+  provincial_tax?: number;
+  total_tax?: number;
+  marginal_rate?: number;
+  average_rate?: number;
+  federal_bracket?: TaxBracketHit | null;
+  provincial_bracket?: TaxBracketHit | null;
+  additional_contribution?: number;
+  tax_saving?: number;
+};
+
+export type RrspRoom = {
+  available: boolean;
+  tax_year?: number;
+  rate?: number;
+  dollar_limit?: number;
+  earned_income?: number;
+  generated?: number;
+  pension_adjustment?: number;
+  carry_forward?: number;
+  room?: number;
+  capped_by_limit?: boolean;
+};
+
+export type PayrollSummary = {
+  tax_year: number;
+  stub_count: number;
+  ytd_gross: number;
+  ytd_income_tax: number;
+  ytd_cpp: number;
+  ytd_ei: number;
+  ytd_rrsp: number;
+  ytd_employer_rrsp: number;
+  ytd_rrsp_contributed: number;
+  ytd_pension: number;
+  ytd_other_deductions: number;
+  ytd_net: number;
+  annualized_gross: number;
+  projection_basis: string;
+  tax: TaxEstimate;
+  tax_if_rrsp_maxed: TaxEstimate | null;
+  rrsp: RrspRoom;
+  withholding_delta: number | null;
+  rates_verified_note: string;
+};
+
+export type TaxBracket = {
+  id: number;
+  tax_year: number;
+  jurisdiction: string;
+  lower_bound: number;
+  upper_bound: number | null;
+  rate: number;
+};
+
+export type TaxSetting = {
+  tax_year: number;
+  rrsp_rate: number;
+  rrsp_dollar_limit: number;
+  federal_basic_personal_amount: number;
+  provincial_basic_personal_amount: number;
+  province: string;
+};
+
 async function asJson<T>(res: Response): Promise<T> {
   if (!res.ok) {
     const text = await res.text();
@@ -457,6 +584,70 @@ export async function setTransactionTags(
       body: JSON.stringify({ tags }),
     })
   );
+}
+
+export async function previewPayStub(file: File): Promise<PayStubDraft> {
+  const form = new FormData();
+  form.append("file", file);
+  return asJson(
+    await fetch(`${API_BASE}/payroll/preview`, { method: "POST", body: form })
+  );
+}
+
+export async function listPayStubs(year?: number): Promise<PayStub[]> {
+  const qs = year ? `?year=${year}` : "";
+  return asJson(await fetch(`${API_BASE}/payroll/stubs${qs}`));
+}
+
+export async function createPayStub(payload: PayStubFields): Promise<PayStub> {
+  return asJson(
+    await fetch(`${API_BASE}/payroll/stubs`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+  );
+}
+
+export async function deletePayStub(stubId: number): Promise<void> {
+  await asJson(
+    await fetch(`${API_BASE}/payroll/stubs/${stubId}`, { method: "DELETE" })
+  );
+}
+
+export async function getPayrollSummary(
+  year?: number,
+  carryForward = 0
+): Promise<PayrollSummary> {
+  const params = new URLSearchParams();
+  if (year) params.set("year", String(year));
+  if (carryForward) params.set("carry_forward", String(carryForward));
+  const qs = params.toString() ? `?${params.toString()}` : "";
+  return asJson(await fetch(`${API_BASE}/payroll/summary${qs}`));
+}
+
+export async function listTaxBrackets(year?: number): Promise<TaxBracket[]> {
+  const qs = year ? `?year=${year}` : "";
+  return asJson(await fetch(`${API_BASE}/payroll/tax-brackets${qs}`));
+}
+
+export async function replaceTaxBrackets(
+  taxYear: number,
+  jurisdiction: string,
+  brackets: { lower_bound: number; upper_bound: number | null; rate: number }[]
+): Promise<TaxBracket[]> {
+  return asJson(
+    await fetch(`${API_BASE}/payroll/tax-brackets`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tax_year: taxYear, jurisdiction, brackets }),
+    })
+  );
+}
+
+export async function getTaxSettings(year?: number): Promise<TaxSetting | null> {
+  const qs = year ? `?year=${year}` : "";
+  return asJson(await fetch(`${API_BASE}/payroll/tax-settings${qs}`));
 }
 
 export async function setTransactionCategory(

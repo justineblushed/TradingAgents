@@ -10,6 +10,7 @@ from app.routers import (
     dashboard,
     healthscore,
     networth,
+    payroll,
     statements,
     tags,
     transactions,
@@ -41,6 +42,7 @@ app.include_router(categories.router)
 app.include_router(coverage.router)
 app.include_router(healthscore.router)
 app.include_router(networth.router)
+app.include_router(payroll.router)
 app.include_router(statements.router)
 app.include_router(tags.router)
 app.include_router(transactions.router)

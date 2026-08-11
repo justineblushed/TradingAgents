@@ -194,6 +194,16 @@ def _migrate_category_taxonomy() -> None:
         db.close()
 
 
+def _seed_tax_data() -> None:
+    from app.taxseed import seed_tax_data
+
+    db = SessionLocal()
+    try:
+        seed_tax_data(db)
+    finally:
+        db.close()
+
+
 def init_db() -> None:
     from app import models  # noqa: F401  (ensure models are registered)
 
@@ -202,3 +212,4 @@ def init_db() -> None:
     _migrate_category_taxonomy()
     if needs_classification_backfill:
         _backfill_classification()
+    _seed_tax_data()

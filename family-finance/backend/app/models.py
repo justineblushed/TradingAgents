@@ -182,6 +182,69 @@ class Tag(Base):
     )
 
 
+class PayStub(Base):
+    """One pay period, decomposed.
+
+    A bank statement only shows the net deposit. The stub is what reveals
+    gross pay and where the rest went — income tax withheld, CPP, EI,
+    RRSP/pension contributions — which is what actual tax-bracket and
+    RRSP-room calculations need.
+    """
+
+    __tablename__ = "pay_stubs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    employer: Mapped[str] = mapped_column(String(120), default="")
+    earner: Mapped[str] = mapped_column(String(80), default="")  # which family member
+    pay_date: Mapped[date] = mapped_column(Date)
+    period_start: Mapped[date | None] = mapped_column(Date, nullable=True)
+    period_end: Mapped[date | None] = mapped_column(Date, nullable=True)
+
+    gross_pay: Mapped[float] = mapped_column(Numeric(12, 2), default=0)
+    income_tax: Mapped[float] = mapped_column(Numeric(12, 2), default=0)
+    cpp: Mapped[float] = mapped_column(Numeric(12, 2), default=0)
+    ei: Mapped[float] = mapped_column(Numeric(12, 2), default=0)
+    rrsp_employee: Mapped[float] = mapped_column(Numeric(12, 2), default=0)
+    pension_employee: Mapped[float] = mapped_column(Numeric(12, 2), default=0)
+    union_dues: Mapped[float] = mapped_column(Numeric(12, 2), default=0)
+    other_deductions: Mapped[float] = mapped_column(Numeric(12, 2), default=0)
+    net_pay: Mapped[float] = mapped_column(Numeric(12, 2), default=0)
+
+    # Employer-side amounts don't reduce take-home but do affect RRSP room
+    # (via the pension adjustment) and total compensation.
+    employer_rrsp: Mapped[float] = mapped_column(Numeric(12, 2), default=0)
+    employer_pension: Mapped[float] = mapped_column(Numeric(12, 2), default=0)
+
+    notes: Mapped[str] = mapped_column(Text, default="")
+
+
+class TaxBracket(Base):
+    """A progressive tax bracket, stored as data so rates can be corrected
+    without a code change — they are indexed annually and this app should
+    never pretend its built-in numbers are authoritative."""
+
+    __tablename__ = "tax_brackets"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tax_year: Mapped[int] = mapped_column()
+    jurisdiction: Mapped[str] = mapped_column(String(20))  # "federal" | "MB" | ...
+    lower_bound: Mapped[float] = mapped_column(Numeric(12, 2))
+    upper_bound: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
+    rate: Mapped[float] = mapped_column(Numeric(6, 4))  # 0.205 = 20.5%
+
+
+class TaxYearSetting(Base):
+    __tablename__ = "tax_year_settings"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tax_year: Mapped[int] = mapped_column(unique=True)
+    rrsp_rate: Mapped[float] = mapped_column(Numeric(6, 4), default=0.18)
+    rrsp_dollar_limit: Mapped[float] = mapped_column(Numeric(12, 2))
+    federal_basic_personal_amount: Mapped[float] = mapped_column(Numeric(12, 2))
+    provincial_basic_personal_amount: Mapped[float] = mapped_column(Numeric(12, 2))
+    province: Mapped[str] = mapped_column(String(20), default="MB")
+
+
 class CoverageSkip(Base):
     """A month the user marked as N/A for an account — no statement exists
     (card unused that month, account opened mid-year, etc.), so the
