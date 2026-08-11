@@ -274,6 +274,28 @@ class SpendingControl(BaseModel):
     adjustable_months_of_history: int = 0
 
 
+class CalendarDay(BaseModel):
+    date: date
+    in_month: bool  # padding days from the adjacent month, to fill full weeks
+    spending: float
+    income: float
+    transaction_count: int
+
+
+class CalendarSummary(BaseModel):
+    """One month, gridded into full weeks (Monday start) so it lines up
+    like a real calendar. Padding days from the adjacent month keep their
+    real numbers — a purchase on the 30th showing in next month's first
+    row is still a real purchase — the frontend just dims them so they
+    read as context rather than part of the month."""
+
+    month: str
+    days: list[CalendarDay]
+    max_daily_spending: float  # for the frontend's colour scale
+    total_spending: float
+    total_income: float
+
+
 class SignIssue(BaseModel):
     """A transaction filed under an income category but stored with a
     positive (money-out) amount instead of negative (money-in) — the one

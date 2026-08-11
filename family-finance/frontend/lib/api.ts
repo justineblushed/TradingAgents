@@ -677,6 +677,27 @@ export type SankeyLinkData = {
   value: number;
 };
 
+export type CalendarDay = {
+  date: string;
+  in_month: boolean;
+  spending: number;
+  income: number;
+  transaction_count: number;
+};
+
+export type CalendarSummary = {
+  month: string;
+  days: CalendarDay[];
+  max_daily_spending: number;
+  total_spending: number;
+  total_income: number;
+};
+
+export async function getCalendar(month?: string): Promise<CalendarSummary> {
+  const qs = month ? `?month=${month}` : "";
+  return asJson(await fetch(`${API_BASE}/dashboard/calendar${qs}`));
+}
+
 export type SankeySummary = {
   month: string;
   total_income: number;

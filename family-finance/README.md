@@ -74,6 +74,17 @@ machine running the backend.
   income figure is actually negative; each flagged row can be fixed
   individually or in bulk, and the fix re-validates every row itself
   rather than trusting a stale list.
+- **Spending Calendar** (`/calendar`): a month grid shaded by that day's
+  spending, scaled against the month's own highest-spending day rather
+  than a fixed dollar amount, so a quiet month and a big one both use the
+  full range of shading. A green dot marks a day money came in. The grid
+  always starts on Monday and ends on Sunday, so a few days from the
+  adjacent month pad the front/back — those days keep their real
+  transaction data (a padding-day purchase isn't hidden or zeroed) but are
+  visually dimmed and excluded from the month's own totals, which are
+  computed the same way as the Dashboard's so the two can never disagree.
+  Clicking any day, including a padding one, opens its transactions inline
+  and links through to the Transactions page filtered to that month.
 - **Cash flow vs. balance sheet are modeled separately, on purpose:**
   - *Cash flow* (`/dashboard`, `/transactions`): spending and income for
     a month, computed from imported transactions. Transactions in a

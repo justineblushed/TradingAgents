@@ -22,6 +22,8 @@ from app.recurring import detect_recurring, next_payday
 from app.schemas import (
     AreaToWatch,
     BudgetVariance,
+    CalendarDay,
+    CalendarSummary,
     CategoryDetail,
     CategoryMonthPoint,
     CostTypeSlice,
@@ -640,4 +642,68 @@ def sankey(month: str | None = None, db: Session = Depends(get_db)):
         nodes=nodes,
         links=links,
         shortfall=shortfall,
+    )
+
+
+@router.get("/calendar", response_model=CalendarSummary)
+def calendar_view(month: str | None = None, db: Session = Depends(get_db)):
+    """Per-day spending and income for a month, gridded to full weeks.
+
+    Uses the same netting as /summary (transfers excluded) and only sums
+    in-month days into the totals, so this view's numbers agree with the
+    dashboard's KPI cards for the same month.
+    """
+    month = month or _current_month()
+    start_str, end_str = month_bounds(month)
+    first_day = date_type.fromisoformat(start_str)
+    last_day = date_type.fromisoformat(end_str) - timedelta(days=1)
+
+    # Monday-start grid: back up to the Monday on/before the 1st, and
+    # forward to the Sunday on/after the last day, so every row is a full
+    # week and the grid never has a dangling partial row.
+    grid_start = first_day - timedelta(days=first_day.weekday())
+    grid_end = last_day + timedelta(days=6 - last_day.weekday())
+
+    rows = (
+        db.query(Transaction)
+        .options(joinedload(Transaction.category))
+        .filter(Transaction.trans_date >= grid_start, Transaction.trans_date <= grid_end)
+        .all()
+    )
+    rows = [r for r in rows if not (r.category and r.category.kind == CategoryKind.transfer)]
+
+    by_day_spending: dict = defaultdict(float)
+    by_day_income: dict = defaultdict(float)
+    by_day_count: dict = defaultdict(int)
+    for r in rows:
+        amount = float(r.amount)
+        kind = r.category.kind if r.category else None
+        is_spending = kind == CategoryKind.expense or (kind is None and amount > 0)
+        by_day_count[r.trans_date] += 1
+        if is_spending:
+            by_day_spending[r.trans_date] += amount
+        else:
+            by_day_income[r.trans_date] += -amount
+
+    days: list[CalendarDay] = []
+    d = grid_start
+    while d <= grid_end:
+        days.append(
+            CalendarDay(
+                date=d,
+                in_month=(first_day <= d <= last_day),
+                spending=round(by_day_spending.get(d, 0.0), 2),
+                income=round(by_day_income.get(d, 0.0), 2),
+                transaction_count=by_day_count.get(d, 0),
+            )
+        )
+        d += timedelta(days=1)
+
+    in_month = [dd for dd in days if dd.in_month]
+    return CalendarSummary(
+        month=month,
+        days=days,
+        max_daily_spending=round(max((dd.spending for dd in days), default=0.0), 2),
+        total_spending=round(sum(dd.spending for dd in in_month), 2),
+        total_income=round(sum(dd.income for dd in in_month), 2),
     )
