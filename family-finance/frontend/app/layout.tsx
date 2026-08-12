@@ -15,14 +15,18 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <div className="mx-auto max-w-5xl px-4 py-6">
-          <header className="mb-8 flex items-center justify-between">
-            <h1 className="text-xl font-semibold text-brand-700">
-              Family Finance Tracker
+        <div className="flex min-h-screen">
+          <aside className="flex w-60 shrink-0 flex-col border-r border-slate-200 bg-white px-3 py-6">
+            <h1 className="mb-6 px-3 text-lg font-semibold text-brand-700">
+              Family Finance
+              <br />
+              Tracker
             </h1>
             <NavLinks />
-          </header>
-          <main>{children}</main>
+          </aside>
+          <main className="min-w-0 flex-1 overflow-x-auto px-6 py-6">
+            {children}
+          </main>
         </div>
       </body>
     </html>

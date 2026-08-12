@@ -17,6 +17,7 @@ import {
   previewStatement,
 } from "@/lib/api";
 import { formatSignedCurrency } from "@/lib/format";
+import { CategoryOptions } from "../category-select";
 
 export default function UploadPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -365,11 +366,7 @@ export default function UploadPage() {
                         {!t.suggested_category && (
                           <option value="">Uncategorized</option>
                         )}
-                        {categories.map((c) => (
-                          <option key={c.id} value={c.name}>
-                            {c.name}
-                          </option>
-                        ))}
+                        <CategoryOptions categories={categories} />
                       </select>
                     </td>
                   </tr>

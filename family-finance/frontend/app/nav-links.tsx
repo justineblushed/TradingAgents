@@ -14,30 +14,18 @@ const LINKS = [
   { href: "/categories", label: "Categories" },
   { href: "/rules", label: "Rules" },
   { href: "/sign-check", label: "Sign Check" },
+  { href: "/duplicates", label: "Duplicates" },
   { href: "/statement-log", label: "Statement Log" },
 ];
 
 export default function NavLinks() {
   const pathname = usePathname();
   return (
-    <nav className="flex flex-wrap items-center gap-4 text-sm font-medium">
-      {LINKS.map((link) => {
-        const active = pathname === link.href;
-        return (
-          <Link
-            key={link.href}
-            href={link.href}
-            aria-current={active ? "page" : undefined}
-            className={active ? "text-brand-700" : "text-slate-600 hover:text-brand-600"}
-          >
-            {link.label}
-          </Link>
-        );
-      })}
+    <nav className="flex flex-col gap-1 text-sm font-medium">
       <Link
         href="/upload"
         aria-current={pathname === "/upload" ? "page" : undefined}
-        className={`rounded-md px-3 py-1.5 font-medium text-white shadow-sm ${
+        className={`mb-2 rounded-md px-3 py-2 text-center font-medium text-white shadow-sm ${
           pathname === "/upload"
             ? "bg-brand-700"
             : "bg-brand-500 hover:bg-brand-600"
@@ -45,6 +33,23 @@ export default function NavLinks() {
       >
         + Upload Statement
       </Link>
+      {LINKS.map((link) => {
+        const active = pathname === link.href;
+        return (
+          <Link
+            key={link.href}
+            href={link.href}
+            aria-current={active ? "page" : undefined}
+            className={`rounded-md px-3 py-2 ${
+              active
+                ? "bg-brand-600 font-semibold text-white shadow-sm"
+                : "text-slate-600 hover:bg-slate-100 hover:text-brand-600"
+            }`}
+          >
+            {link.label}
+          </Link>
+        );
+      })}
     </nav>
   );
 }

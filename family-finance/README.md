@@ -15,6 +15,9 @@ machine running the backend.
 
 ## Current scope
 
+- A left-hand sidebar holds every page's navigation, with the current
+  page marked by a solid colour box rather than just a text-colour
+  change — easier to spot at a glance than the old top bar.
 - Upload a credit-card statement PDF → preview parsed transactions →
   edit categories inline → confirm import.
 - Self-service categories (`/categories` page): add/edit keywords/delete,
@@ -55,12 +58,13 @@ machine running the backend.
 - **Cash Flow Sankey** (`/cash-flow`): income sources flow into a hub, then
   out to spending groups and their categories, plus whatever's left over
   to Savings. Node colours are the same ones used everywhere else in the
-  app, and clicking a category opens its drill-down. A group with only
-  one populated category that month is drawn as a single node rather than
-  a group and an identical-looking leaf underneath it. When spending
-  exceeds income, there's no fabricated flow into savings — a
-  negative-value link isn't meaningful in a Sankey — the gap is reported
-  as a number instead.
+  app, and clicking *any* category node — an income source like
+  Employment Income or a spending category — opens its drill-down. A
+  group with only one populated category that month is drawn as a single
+  node rather than a group and an identical-looking leaf underneath it.
+  When spending exceeds income, there's no fabricated flow into savings —
+  a negative-value link isn't meaningful in a Sankey — the gap is
+  reported as a number instead.
 - **Sign Check** (`/sign-check`): finds transactions filed under an income
   category (Employment Income, Rental Income, ...) but stored with a
   positive amount instead of the negative this app's convention expects.
@@ -74,6 +78,19 @@ machine running the backend.
   income figure is actually negative; each flagged row can be fixed
   individually or in bulk, and the fix re-validates every row itself
   rather than trusting a stale list.
+- **Duplicates** (`/duplicates`): finds transactions already sitting in
+  the database more than once with the same account, date, description,
+  and amount — the kind that slips in from a re-uploaded statement kept
+  on purpose, or two files covering an overlapping period. One copy per
+  group is left unchecked by default; the rest are pre-checked for
+  removal, but a genuinely repeated same-day charge (two identical
+  parking tickets, say) looks identical from the data alone, so it's
+  worth a glance before removing anything.
+- Every category picker in the app (Transactions, the Upload review
+  table, Rules) is grouped the same way the Categories page itself
+  groups them — by group (Housing, Transportation, ...), then Income,
+  then Transfer — instead of one flat alphabetical list that cuts across
+  groups and kinds.
 - **Spending Calendar** (`/calendar`): a month grid shaded by that day's
   spending, scaled against the month's own highest-spending day rather
   than a fixed dollar amount, so a quiet month and a big one both use the

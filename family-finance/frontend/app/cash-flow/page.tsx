@@ -23,7 +23,7 @@ function CashFlowNode(props: any) {
   const isRightEdge = payload.kind === "category" || payload.kind === "savings";
   return (
     <g
-      style={{ cursor: payload.kind === "category" ? "pointer" : "default" }}
+      style={{ cursor: payload.onSelect ? "pointer" : "default" }}
       onClick={payload.onSelect}
     >
       <rect
@@ -107,8 +107,12 @@ export default function CashFlowPage() {
       nodes: data.nodes.map((n, i) => ({
         ...n,
         value: Math.max(incoming[i], outgoing[i]),
+        // Both expense leaf nodes and income nodes map onto a real category
+        // — the drill-down endpoint already handles either kind — so both
+        // should open it. Hub, group, and Savings nodes have no single
+        // category behind them, so they stay unclickable.
         onSelect:
-          n.kind === "category"
+          n.kind === "category" || n.kind === "income"
             ? () => router.push(`/categories/${encodeURIComponent(n.name)}?month=${month}`)
             : undefined,
       })),

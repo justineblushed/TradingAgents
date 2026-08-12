@@ -290,6 +290,38 @@ export type Category = {
   emoji: string;
 };
 
+// The same order the Categories page itself renders in, top to bottom:
+// expense categories grouped by GROUP_ORDER (plus an "Other" bucket for any
+// ungrouped/unrecognized group), then Income categories, then Transfer
+// categories. Any category picker elsewhere in the app should read in this
+// order instead of the flat alphabetical list /categories returns — this is
+// the single place that ordering is defined so every picker stays in sync
+// with the Categories page instead of drifting into its own A-Z list.
+export function groupedCategorySections(
+  categories: Category[]
+): { label: string; categories: Category[] }[] {
+  const expense = categories.filter((c) => c.kind === "expense");
+  const income = categories.filter((c) => c.kind === "income");
+  const transfer = categories.filter((c) => c.kind === "transfer");
+
+  const sections: { label: string; categories: Category[] }[] = GROUP_ORDER.filter(
+    (g) => expense.some((c) => c.group_name === g)
+  ).map((group) => ({
+    label: group,
+    categories: expense.filter((c) => c.group_name === group),
+  }));
+
+  const other = expense.filter(
+    (c) => !c.group_name || !(GROUP_ORDER as readonly string[]).includes(c.group_name)
+  );
+  if (other.length > 0) sections.push({ label: "Other", categories: other });
+
+  if (income.length > 0) sections.push({ label: "Income", categories: income });
+  if (transfer.length > 0) sections.push({ label: "Transfer", categories: transfer });
+
+  return sections;
+}
+
 export type CostTypeSlice = {
   cost_type: CostType;
   label: string;
@@ -813,6 +845,35 @@ export async function fixSignIssues(
 ): Promise<SignIssueFixResult> {
   return asJson(
     await fetch(`${API_BASE}/transactions/sign-issues/fix`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ transaction_ids: transactionIds }),
+    })
+  );
+}
+
+export type DuplicateGroup = {
+  trans_date: string;
+  description: string;
+  amount: number;
+  account_name: string;
+  category: string | null;
+  transaction_ids: number[];
+};
+
+export type DuplicateFixResult = {
+  deleted: number;
+};
+
+export async function listDuplicateTransactions(): Promise<DuplicateGroup[]> {
+  return asJson(await fetch(`${API_BASE}/transactions/duplicates`));
+}
+
+export async function fixDuplicateTransactions(
+  transactionIds: number[]
+): Promise<DuplicateFixResult> {
+  return asJson(
+    await fetch(`${API_BASE}/transactions/duplicates/fix`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ transaction_ids: transactionIds }),

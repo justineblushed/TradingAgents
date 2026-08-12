@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
 
@@ -5,6 +7,9 @@ from app.dateutil import month_bounds
 from app.db import get_db
 from app.models import Category, CategoryKind, CategorySource, Tag, Transaction
 from app.schemas import (
+    DuplicateFixRequest,
+    DuplicateFixResult,
+    DuplicateGroup,
     SignIssue,
     SignIssueFixRequest,
     SignIssueFixResult,
@@ -154,3 +159,55 @@ def fix_sign_issues(payload: SignIssueFixRequest, db: Session = Depends(get_db))
             already_ok += 1
     db.commit()
     return SignIssueFixResult(fixed=fixed, already_ok=already_ok)
+
+
+@router.get("/duplicates", response_model=list[DuplicateGroup])
+def list_duplicate_transactions(db: Session = Depends(get_db)):
+    """Transactions already sitting in the database more than once with the
+    same account, date, description, and amount.
+
+    Statement imports already guard against re-importing a duplicate, but
+    that can't catch every path in — two overlapping files covering the
+    same period, or explicitly choosing "import anyway" on a genuine
+    re-upload. This finds whatever slipped through so it can be cleaned up
+    after the fact, the same self-service way sign issues are.
+    """
+    rows = (
+        db.query(Transaction)
+        .options(joinedload(Transaction.category), joinedload(Transaction.account))
+        .all()
+    )
+    groups: dict[tuple, list[Transaction]] = defaultdict(list)
+    for r in rows:
+        key = (r.account_id, r.trans_date, r.description, float(r.amount))
+        groups[key].append(r)
+
+    result = [
+        DuplicateGroup(
+            trans_date=txns[0].trans_date,
+            description=txns[0].description,
+            amount=float(txns[0].amount),
+            account_name=txns[0].account.name if txns[0].account else "",
+            category=txns[0].category.name if txns[0].category else None,
+            transaction_ids=sorted(t.id for t in txns),
+        )
+        for txns in groups.values()
+        if len(txns) > 1
+    ]
+    result.sort(key=lambda g: g.trans_date, reverse=True)
+    return result
+
+
+@router.post("/duplicates/fix", response_model=DuplicateFixResult)
+def fix_duplicate_transactions(payload: DuplicateFixRequest, db: Session = Depends(get_db)):
+    if not payload.transaction_ids:
+        raise HTTPException(400, "No transactions selected")
+    deleted = 0
+    for transaction_id in payload.transaction_ids:
+        txn = db.get(Transaction, transaction_id)
+        if txn is None:
+            continue
+        db.delete(txn)
+        deleted += 1
+    db.commit()
+    return DuplicateFixResult(deleted=deleted)

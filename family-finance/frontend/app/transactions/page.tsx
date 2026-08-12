@@ -13,6 +13,7 @@ import {
   setTransactionTags,
 } from "@/lib/api";
 import { formatCurrency, formatSignedCurrency } from "@/lib/format";
+import { CategoryOptions } from "../category-select";
 
 function currentMonth(): string {
   const now = new Date();
@@ -217,11 +218,7 @@ function TransactionsInner() {
                           }`}
                         >
                           {!t.category && <option value="">Uncategorized</option>}
-                          {categories.map((c) => (
-                            <option key={c.id} value={c.name}>
-                              {c.emoji ? `${c.emoji} ${c.name}` : c.name}
-                            </option>
-                          ))}
+                          <CategoryOptions categories={categories} />
                         </select>
                         {savingId === t.id && (
                           <span className="text-xs text-slate-400">Saving…</span>

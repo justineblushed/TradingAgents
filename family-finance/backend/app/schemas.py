@@ -320,6 +320,28 @@ class SignIssueFixResult(BaseModel):
     already_ok: int = 0  # requested but no longer a sign issue by the time this ran
 
 
+class DuplicateGroup(BaseModel):
+    """Two or more transactions already sitting in the database with the
+    same account, date, description, and amount — the kind of duplicate
+    that slips in from a re-uploaded statement imported with "keep
+    duplicates," or two overlapping files covering the same period."""
+
+    trans_date: date
+    description: str
+    amount: float
+    account_name: str
+    category: str | None = None
+    transaction_ids: list[int]
+
+
+class DuplicateFixRequest(BaseModel):
+    transaction_ids: list[int]
+
+
+class DuplicateFixResult(BaseModel):
+    deleted: int
+
+
 class RuleOut(BaseModel):
     id: int
     keyword: str

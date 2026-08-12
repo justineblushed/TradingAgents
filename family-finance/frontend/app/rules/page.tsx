@@ -18,6 +18,7 @@ import {
   updateRule,
 } from "@/lib/api";
 import { formatCurrency, formatSignedCurrency } from "@/lib/format";
+import { CategoryOptions } from "../category-select";
 
 function emptyRule(): RuleInput {
   return {
@@ -284,11 +285,7 @@ export default function RulesPage() {
                 className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
               >
                 <option value="">Choose a category…</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.name}>
-                    {c.name}
-                  </option>
-                ))}
+                <CategoryOptions categories={categories} />
               </select>
             </div>
             <div>
