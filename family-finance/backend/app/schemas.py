@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -402,9 +403,24 @@ class AccountCreate(BaseModel):
     credit_limit: float | None = None
 
 
+class AccountUpdate(BaseModel):
+    """All fields optional — only what's provided gets changed."""
+
+    name: str | None = None
+    institution: str | None = None
+    account_type: str | None = None
+    last_four: str | None = None
+    credit_limit: float | None = None
+
+
+class AccountMoveRequest(BaseModel):
+    direction: Literal["up", "down"]
+
+
 class AccountOut(AccountCreate):
     id: int
     is_liability: bool = False
+    sort_order: int | None = None
 
     class Config:
         from_attributes = True
@@ -442,6 +458,12 @@ class NetWorthSummary(BaseModel):
     net_worth: float
     net_worth_prev_month: float | None = None
     delta: float | None = None
+    # How many accounts the delta is actually based on — an account with no
+    # balance data from before this month (e.g. a mortgage entered for the
+    # first time) can't fairly contribute to a month-over-month comparison,
+    # so it's left out of the delta rather than assumed to have been $0.
+    accounts_with_history: int = 0
+    accounts_total: int = 0
     accounts: list[AccountWithBalance]
 
 

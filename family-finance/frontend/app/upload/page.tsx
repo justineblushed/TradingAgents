@@ -2,8 +2,13 @@
 
 import { useEffect, useState } from "react";
 import {
+  ACCOUNT_TYPE_HINTS,
+  ACCOUNT_TYPE_LABELS,
   Account,
+  AccountType,
+  ASSET_ACCOUNT_TYPES,
   Category,
+  LIABILITY_ACCOUNT_TYPES,
   ParsedTransaction,
   confirmStatement,
   createAccount,
@@ -17,6 +22,7 @@ export default function UploadPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [accountId, setAccountId] = useState<number | null>(null);
   const [newAccountName, setNewAccountName] = useState("");
+  const [newAccountType, setNewAccountType] = useState<AccountType | "">("");
   const [categories, setCategories] = useState<Category[]>([]);
   const [statementYear, setStatementYear] = useState(new Date().getFullYear());
   const [periodLabel, setPeriodLabel] = useState("");
@@ -52,16 +58,17 @@ export default function UploadPage() {
   }, []);
 
   async function handleCreateAccount() {
-    if (!newAccountName.trim()) return;
+    if (!newAccountName.trim() || !newAccountType) return;
     setMessage(null);
     try {
       const account = await createAccount({
         name: newAccountName,
-        account_type: "credit_card",
+        account_type: newAccountType,
       });
       setAccounts((prev) => [...prev, account]);
       setAccountId(account.id);
       setNewAccountName("");
+      setNewAccountType("");
       setShowAddAccount(false);
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Failed to create account");
@@ -168,18 +175,40 @@ export default function UploadPage() {
                 ? "You don't have any accounts yet — add your first one:"
                 : "New account name"}
             </label>
-            <div className="mt-1 flex items-center gap-2">
+            <div className="mt-1 flex flex-wrap items-center gap-2">
               <input
                 placeholder="e.g. Rogers Mastercard"
                 value={newAccountName}
                 onChange={(e) => setNewAccountName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleCreateAccount()}
                 className="rounded-md border border-slate-300 px-2 py-1 text-sm"
                 autoFocus={accounts.length === 0}
               />
+              <select
+                value={newAccountType}
+                onChange={(e) => setNewAccountType(e.target.value as AccountType)}
+                className={`rounded-md border px-2 py-1 text-sm ${
+                  newAccountType ? "border-slate-300" : "border-amber-300 bg-amber-50"
+                }`}
+              >
+                <option value="">Choose a type…</option>
+                <optgroup label="Assets">
+                  {ASSET_ACCOUNT_TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {ACCOUNT_TYPE_LABELS[t]}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="Liabilities">
+                  {LIABILITY_ACCOUNT_TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {ACCOUNT_TYPE_LABELS[t]}
+                    </option>
+                  ))}
+                </optgroup>
+              </select>
               <button
                 onClick={handleCreateAccount}
-                disabled={!newAccountName.trim()}
+                disabled={!newAccountName.trim() || !newAccountType}
                 className="rounded-md bg-brand-500 px-3 py-1 text-sm font-medium text-white hover:bg-brand-600 disabled:cursor-not-allowed disabled:bg-slate-300"
               >
                 Add
@@ -189,6 +218,7 @@ export default function UploadPage() {
                   onClick={() => {
                     setShowAddAccount(false);
                     setNewAccountName("");
+                    setNewAccountType("");
                   }}
                   className="text-sm text-slate-400 hover:text-slate-600"
                 >
@@ -196,6 +226,15 @@ export default function UploadPage() {
                 </button>
               )}
             </div>
+            {newAccountType ? (
+              <p className="mt-1 text-xs text-slate-400">{ACCOUNT_TYPE_HINTS[newAccountType]}</p>
+            ) : (
+              <p className="mt-1 text-xs font-medium text-amber-700">
+                Pick the type that matches this account — it decides whether it
+                shows up as an asset or a liability on Net Worth, and it can't
+                be guessed correctly for you.
+              </p>
+            )}
           </div>
         )}
       </div>

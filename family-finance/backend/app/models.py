@@ -7,6 +7,7 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
+    Integer,
     Numeric,
     String,
     Table,
@@ -109,6 +110,9 @@ class Account(Base):
     last_four: Mapped[str] = mapped_column(String(4), default="")
     # Only meaningful for credit_card accounts; used to compute available credit.
     credit_limit: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
+    # Manual display order within its own Assets/Liabilities group on the Net
+    # Worth page. Nullable so older rows can be backfilled by migration.
+    sort_order: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     transactions: Mapped[list["Transaction"]] = relationship(back_populates="account")
     balances: Mapped[list["AccountBalance"]] = relationship(

@@ -133,6 +133,23 @@ def _migrate_existing_tables() -> bool:
             conn.execute(
                 text("UPDATE accounts SET account_type = 'other_asset' WHERE account_type = 'other'")
             )
+            if "sort_order" not in cols:
+                conn.execute(text("ALTER TABLE accounts ADD COLUMN sort_order INTEGER"))
+                # Backfill using the same order the page has always shown
+                # (alphabetical by name), so existing installs don't see
+                # their accounts jump around the first time this column
+                # appears.
+                existing_ids = [
+                    row[0]
+                    for row in conn.execute(
+                        text("SELECT id FROM accounts ORDER BY name")
+                    ).fetchall()
+                ]
+                for position, account_id in enumerate(existing_ids):
+                    conn.execute(
+                        text("UPDATE accounts SET sort_order = :pos WHERE id = :id"),
+                        {"pos": position, "id": account_id},
+                    )
 
     return added_classification_columns
 

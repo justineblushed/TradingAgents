@@ -37,6 +37,40 @@ export type AccountType =
   | (typeof ASSET_ACCOUNT_TYPES)[number]
   | (typeof LIABILITY_ACCOUNT_TYPES)[number];
 
+export const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
+  cash: "Cash",
+  chequing: "Chequing",
+  savings: "Savings",
+  investment: "Investment",
+  tfsa: "TFSA",
+  rrsp: "RRSP",
+  resp: "RESP",
+  other_asset: "Other asset",
+  credit_card: "Credit Card",
+  mortgage: "Mortgage",
+  car_loan: "Car Loan",
+  other_liability: "Other liability",
+};
+
+// Short answers to "what does this type actually capture?" — shown as a
+// caption under the type selector wherever an account gets created or
+// edited, so the choice is self-explanatory instead of a guess.
+export const ACCOUNT_TYPE_HINTS: Record<AccountType, string> = {
+  cash: "Physical cash or anything else you track by hand — no statements to import.",
+  chequing: "Your everyday spending account — debit card, e-transfers, bill payments.",
+  savings: "A savings account outside any registered plan.",
+  investment:
+    "A non-registered (taxable) brokerage account — stocks, ETFs, mutual funds. Not a TFSA, RRSP, or RESP — those have their own types below.",
+  tfsa: "Tax-Free Savings Account — registered; growth and withdrawals are tax-free.",
+  rrsp: "Registered Retirement Savings Plan — registered; contributions are tax-deductible.",
+  resp: "Registered Education Savings Plan — registered; for a child's education.",
+  other_asset: "Anything else you own that doesn't fit the types above.",
+  credit_card: "A credit card balance — what you currently owe.",
+  mortgage: "Your home loan balance.",
+  car_loan: "A vehicle loan or lease balance.",
+  other_liability: "Anything else you owe that doesn't fit the types above.",
+};
+
 export type Account = {
   id: number;
   name: string;
@@ -45,6 +79,7 @@ export type Account = {
   last_four: string;
   credit_limit: number | null;
   is_liability: boolean;
+  sort_order: number | null;
 };
 
 export type DashboardSummary = {
@@ -197,6 +232,8 @@ export type NetWorthSummary = {
   net_worth: number;
   net_worth_prev_month: number | null;
   delta: number | null;
+  accounts_with_history: number;
+  accounts_total: number;
   accounts: AccountWithBalance[];
 };
 
@@ -493,6 +530,46 @@ export async function createAccount(payload: {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
+    })
+  );
+}
+
+export async function updateAccount(
+  accountId: number,
+  payload: Partial<{
+    name: string;
+    institution: string;
+    account_type: AccountType;
+    last_four: string;
+    credit_limit: number | null;
+  }>
+): Promise<Account> {
+  return asJson(
+    await fetch(`${API_BASE}/accounts/${accountId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+  );
+}
+
+export async function deleteAccount(accountId: number): Promise<void> {
+  const res = await fetch(`${API_BASE}/accounts/${accountId}`, { method: "DELETE" });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`API error ${res.status}: ${text}`);
+  }
+}
+
+export async function moveAccount(
+  accountId: number,
+  direction: "up" | "down"
+): Promise<Account[]> {
+  return asJson(
+    await fetch(`${API_BASE}/accounts/${accountId}/move`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ direction }),
     })
   );
 }

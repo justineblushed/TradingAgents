@@ -94,9 +94,23 @@ machine running the backend.
   - *Balance sheet* (`/net-worth`): Assets − Liabilities = Net Worth,
     plus the change vs. last month. Since there's no bank feed, balances
     come from either a manually-recorded snapshot (works for any
-    account) or, for credit cards with statements imported but no
-    snapshot yet, an estimate from the running transaction total
-    (clearly labeled "estimated").
+    account) or, for credit cards specifically, an estimate from the
+    running transaction total (clearly labeled "estimated") — a card
+    typically opens at $0, so that's a reasonable starting point; every
+    other account type shows "no balance recorded" instead of guessing,
+    since there's no such starting point to lean on for a chequing or
+    savings account you'd had for years before ever uploading a statement.
+    The month-over-month change only ever compares accounts that have a
+    balance from *before* this month — an account getting its first-ever
+    snapshot (a mortgage entered for the first time, say) is left out of
+    that comparison rather than read as a swing equal to its whole balance.
+  - Each account's name, type, and credit limit can be edited in place
+    from the Net Worth page — the fix for an account that was mis-typed
+    at creation (landing under the wrong side of the balance sheet)
+    without losing its transaction history. An account can be deleted
+    only once it has no transactions or balance snapshots left attached,
+    and each list has its own move up/down controls so Assets and
+    Liabilities can be ordered independently of alphabetical.
 - **Payroll & tax** (`/payroll`): a bank statement only shows the net
   deposit, which hides everything you actually paid. Pay stubs are
   uploaded (best-effort PDF read, every field editable before saving) or
@@ -115,7 +129,11 @@ machine running the backend.
 - Accounts cover both sides of the balance sheet: cash, chequing,
   savings, investment, TFSA, RRSP, RESP (assets) and credit card,
   mortgage, car loan (liabilities). Credit cards optionally track a
-  credit limit for an "available credit" figure.
+  credit limit for an "available credit" figure. Every type selector
+  shows a one-line caption for whichever type is picked — e.g.
+  "Investment" is specifically a non-registered (taxable) brokerage
+  account, as distinct from a TFSA/RRSP/RESP, which each get their own
+  type — so the choice never has to be a guess.
 - SQLite by default — a single file, easy to back up, easy to move to
   Postgres later by changing `DATABASE_URL`. Schema changes use small
   hand-rolled `ALTER TABLE` migrations in `backend/app/db.py` (no
