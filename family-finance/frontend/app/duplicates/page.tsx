@@ -24,7 +24,7 @@ export default function DuplicatesPage() {
       // was imported first) in each group — a sensible default of "keep
       // one, remove the rest" that the user can still adjust before fixing.
       const toDelete = new Set<number>();
-      rows.forEach((g) => g.transaction_ids.slice(1).forEach((id) => toDelete.add(id)));
+      rows.forEach((g) => g.copies.slice(1).forEach((c) => toDelete.add(c.id)));
       setSelected(toDelete);
       setError(null);
     } catch (e) {
@@ -64,17 +64,21 @@ export default function DuplicatesPage() {
     }
   }
 
-  const totalExtraCopies = groups?.reduce((sum, g) => sum + g.transaction_ids.length - 1, 0) ?? 0;
+  const totalExtraCopies = groups?.reduce((sum, g) => sum + g.copies.length - 1, 0) ?? 0;
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-lg font-semibold text-slate-800">Duplicate Transactions</h1>
         <p className="mt-1 max-w-2xl text-xs text-slate-500">
-          A duplicate here means the same account, date, description, and
-          amount showing up more than once — usually a re-uploaded statement
-          imported with "keep duplicates," or two files that covered an
-          overlapping period. One copy of each group is kept selected as
+          A duplicate here means the same date, description, and amount
+          showing up more than once — usually a re-uploaded statement
+          imported with "keep duplicates," two files that covered an
+          overlapping period, or the same statement confirmed into the
+          wrong account and then confirmed again into the right one.
+          Matching ignores letter case and which account a copy landed in,
+          so a group can span more than one account — each copy below shows
+          its own account name. One copy of each group is kept selected as
           "keep" by default; the rest are pre-checked for removal, but check
           the description and amount first — a genuine same-day repeat
           purchase (two identical parking charges, say) looks identical from
@@ -119,48 +123,61 @@ export default function DuplicatesPage() {
           </div>
 
           <div className="mt-4 space-y-4">
-            {groups.map((group, i) => (
-              <div
-                key={`${group.trans_date}-${group.description}-${group.amount}-${i}`}
-                className="rounded-md border border-slate-200 p-3"
-              >
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <div>
-                    <p className="text-sm font-medium text-slate-700">{group.description}</p>
-                    <p className="text-xs text-slate-400">
-                      {group.trans_date} · {group.account_name}
-                      {group.category ? ` · ${group.category}` : " · Uncategorized"}
+            {groups.map((group, i) => {
+              const accountNames = new Set(group.copies.map((c) => c.account_name));
+              const crossAccount = accountNames.size > 1;
+              return (
+                <div
+                  key={`${group.trans_date}-${group.description}-${group.amount}-${i}`}
+                  className="rounded-md border border-slate-200 p-3"
+                >
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-medium text-slate-700">
+                        {group.description}
+                        {crossAccount && (
+                          <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                            spans {accountNames.size} accounts
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-xs text-slate-400">
+                        {group.trans_date}
+                        {!crossAccount && ` · ${group.copies[0].account_name}`}
+                        {group.category ? ` · ${group.category}` : " · Uncategorized"}
+                      </p>
+                    </div>
+                    <p className="text-sm font-semibold text-slate-800">
+                      {formatSignedCurrency(group.amount)} × {group.copies.length}
                     </p>
                   </div>
-                  <p className="text-sm font-semibold text-slate-800">
-                    {formatSignedCurrency(group.amount)} × {group.transaction_ids.length}
-                  </p>
+                  <div className="mt-2 flex flex-wrap gap-4">
+                    {group.copies.map((copy, idx) => (
+                      <div key={copy.id} className="flex items-center gap-1.5 text-xs text-slate-600">
+                        <label className="flex items-center gap-1.5">
+                          <input
+                            type="checkbox"
+                            checked={selected.has(copy.id)}
+                            onChange={() => toggle(copy.id)}
+                          />
+                          Copy {idx + 1} (id {copy.id}, {copy.account_name})
+                          {idx === 0 ? " — kept by default" : ""}
+                        </label>
+                        <Link
+                          href={`/transactions?month=${group.trans_date.slice(0, 7)}&highlight=${copy.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-medium text-brand-600 underline hover:text-brand-700"
+                          title="Open this transaction on the Transactions page in a new tab"
+                        >
+                          View →
+                        </Link>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div className="mt-2 flex flex-wrap gap-4">
-                  {group.transaction_ids.map((id, idx) => (
-                    <div key={id} className="flex items-center gap-1.5 text-xs text-slate-600">
-                      <label className="flex items-center gap-1.5">
-                        <input
-                          type="checkbox"
-                          checked={selected.has(id)}
-                          onChange={() => toggle(id)}
-                        />
-                        Copy {idx + 1} (id {id}){idx === 0 ? " — kept by default" : ""}
-                      </label>
-                      <Link
-                        href={`/transactions?month=${group.trans_date.slice(0, 7)}&highlight=${id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="font-medium text-brand-600 underline hover:text-brand-700"
-                        title="Open this transaction on the Transactions page in a new tab"
-                      >
-                        View →
-                      </Link>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

@@ -842,13 +842,17 @@ export async function fixSignIssues(
   );
 }
 
+export type DuplicateTransactionCopy = {
+  id: number;
+  account_name: string;
+};
+
 export type DuplicateGroup = {
   trans_date: string;
   description: string;
   amount: number;
-  account_name: string;
   category: string | null;
-  transaction_ids: number[];
+  copies: DuplicateTransactionCopy[];
 };
 
 export type DuplicateFixResult = {
@@ -1040,6 +1044,12 @@ export async function replaceTaxBrackets(
 export async function getTaxSettings(year?: number): Promise<TaxSetting | null> {
   const qs = year ? `?year=${year}` : "";
   return asJson(await fetch(`${API_BASE}/payroll/tax-settings${qs}`));
+}
+
+export async function deleteTransaction(transactionId: number): Promise<void> {
+  await asJson(
+    await fetch(`${API_BASE}/transactions/${transactionId}`, { method: "DELETE" })
+  );
 }
 
 export async function setTransactionCategory(

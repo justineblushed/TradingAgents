@@ -11,6 +11,7 @@ from app.schemas import (
     DuplicateFixRequest,
     DuplicateFixResult,
     DuplicateGroup,
+    DuplicateTransactionCopy,
     SignIssue,
     SignIssueFixRequest,
     SignIssueFixResult,
@@ -77,6 +78,16 @@ def list_transactions(
         raise HTTPException(400, "kind must be 'expense' or 'income'")
     rows = query.order_by(Transaction.trans_date).all()
     return [_to_out(r) for r in rows]
+
+
+@router.delete("/{transaction_id}")
+def delete_transaction(transaction_id: int, db: Session = Depends(get_db)):
+    transaction = db.get(Transaction, transaction_id)
+    if transaction is None:
+        raise HTTPException(404, "Transaction not found")
+    db.delete(transaction)
+    db.commit()
+    return {"ok": True}
 
 
 @router.patch("/{transaction_id}/category")
@@ -185,13 +196,16 @@ def fix_sign_issues(payload: SignIssueFixRequest, db: Session = Depends(get_db))
 @router.get("/duplicates", response_model=list[DuplicateGroup])
 def list_duplicate_transactions(db: Session = Depends(get_db)):
     """Transactions already sitting in the database more than once with the
-    same account, date, description, and amount.
+    same date, description, and amount.
 
     Statement imports already guard against re-importing a duplicate, but
     that can't catch every path in — two overlapping files covering the
-    same period, or explicitly choosing "import anyway" on a genuine
-    re-upload. This finds whatever slipped through so it can be cleaned up
-    after the fact, the same self-service way sign issues are.
+    same period, the same statement confirmed into the wrong account and
+    then re-confirmed into the right one, or a description that only
+    differs by letter case between the two copies. Matching is
+    case-insensitive on the description and deliberately ignores which
+    account a copy landed in, so this finds whatever slipped through
+    either path — the same self-service way sign issues are.
     """
     rows = (
         db.query(Transaction)
@@ -200,7 +214,7 @@ def list_duplicate_transactions(db: Session = Depends(get_db)):
     )
     groups: dict[tuple, list[Transaction]] = defaultdict(list)
     for r in rows:
-        key = (r.account_id, r.trans_date, r.description, float(r.amount))
+        key = (r.trans_date, r.description.strip().lower(), float(r.amount))
         groups[key].append(r)
 
     result = [
@@ -208,9 +222,13 @@ def list_duplicate_transactions(db: Session = Depends(get_db)):
             trans_date=txns[0].trans_date,
             description=txns[0].description,
             amount=float(txns[0].amount),
-            account_name=txns[0].account.name if txns[0].account else "",
             category=txns[0].category.name if txns[0].category else None,
-            transaction_ids=sorted(t.id for t in txns),
+            copies=[
+                DuplicateTransactionCopy(
+                    id=t.id, account_name=t.account.name if t.account else ""
+                )
+                for t in sorted(txns, key=lambda t: t.id)
+            ],
         )
         for txns in groups.values()
         if len(txns) > 1

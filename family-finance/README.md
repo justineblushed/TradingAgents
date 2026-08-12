@@ -69,7 +69,11 @@ machine running the backend.
   share an account, a leading brand word, and a similar typical amount —
   a coincidental shared word between two genuinely different charges
   (annual membership fee vs. unrelated purchases at the same store) isn't
-  enough on its own.
+  enough on its own. This merge deliberately never crosses accounts, so
+  if the *same* bill shows up twice with the *same* account name on each
+  row, that's not a wording mismatch — it means the underlying
+  transactions were actually imported twice, once into each of two
+  accounts, and the fix is on the Duplicates page (see below), not here.
 - The Dashboard's **Spending** and **Income** figures, and every category
   node on the **Cash Flow Sankey**, link through to the Transactions page
   filtered to exactly what made up that number — the same
@@ -99,16 +103,26 @@ machine running the backend.
   individually or in bulk, and the fix re-validates every row itself
   rather than trusting a stale list.
 - **Duplicates** (`/duplicates`): finds transactions already sitting in
-  the database more than once with the same account, date, description,
-  and amount — the kind that slips in from a re-uploaded statement kept
-  on purpose, or two files covering an overlapping period. One copy per
-  group is left unchecked by default; the rest are pre-checked for
-  removal, but a genuinely repeated same-day charge (two identical
-  parking tickets, say) looks identical from the data alone, so it's
-  worth a glance before removing anything. Each copy has a **View →**
-  link that opens the Transactions page with that exact row highlighted
-  and scrolled into view, so you can check its surrounding context
-  before deciding what to remove.
+  the database more than once with the same date, description, and
+  amount — the kind that slips in from a re-uploaded statement kept on
+  purpose, two files covering an overlapping period, or the same
+  statement confirmed into the wrong account and then confirmed again
+  into the right one. Matching ignores letter case (so "Interac
+  E-transfer Receive" and "INTERAC E-TRANSFER RECEIVE" still group
+  together) and which account a copy landed in, so a group can span more
+  than one account — a "spans N accounts" badge and each copy's own
+  account name make that visible. One copy per group is left unchecked
+  by default; the rest are pre-checked for removal, but a genuinely
+  repeated same-day charge (two identical parking tickets, say) looks
+  identical from the data alone, so it's worth a glance before removing
+  anything. Each copy has a **View →** link that opens the Transactions
+  page with that exact row highlighted and scrolled into view, so you
+  can check its surrounding context before deciding what to remove. For
+  anything the automated finder doesn't group — two transactions that
+  are duplicates but differ in some way it doesn't check for — every row
+  on the Transactions page also has its own **Delete** button, with a
+  confirmation prompt showing the date, description, and amount before
+  it removes anything.
 - Every category picker in the app (Transactions, the Upload review
   table, Rules) is grouped the same way the Categories page itself
   groups them — by group (Housing, Transportation, ...), then Income,

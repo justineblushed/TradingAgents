@@ -7,6 +7,7 @@ import {
   Tag,
   Transaction,
   TransactionKind,
+  deleteTransaction,
   listCategories,
   listTags,
   listTransactions,
@@ -52,6 +53,7 @@ function TransactionsInner() {
   );
   const [error, setError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   // A transaction landed on from elsewhere (the Duplicates page, say) that
   // should be scrolled to and visually picked out of the list.
   const highlightId = Number(searchParams.get("highlight")) || null;
@@ -116,6 +118,25 @@ function TransactionsInner() {
       );
     } finally {
       setSavingId(null);
+    }
+  }
+
+  async function handleDelete(transaction: Transaction) {
+    const confirmed = window.confirm(
+      `Delete this transaction?\n\n${transaction.trans_date} · ${transaction.description} · ${formatSignedCurrency(
+        transaction.amount
+      )}\n\nThis can't be undone.`
+    );
+    if (!confirmed) return;
+    setDeletingId(transaction.id);
+    setError(null);
+    try {
+      await deleteTransaction(transaction.id);
+      setTransactions((prev) => (prev ? prev.filter((t) => t.id !== transaction.id) : prev));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete transaction");
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -219,6 +240,7 @@ function TransactionsInner() {
                   <th className="text-right">Amount</th>
                   <th>Category</th>
                   <th>Tags</th>
+                  <th />
                 </tr>
               </thead>
               <tbody>
@@ -277,6 +299,16 @@ function TransactionsInner() {
                         allTags={tags}
                         onChange={(next) => handleTagsChange(t.id, next)}
                       />
+                    </td>
+                    <td className="pl-2 text-right">
+                      <button
+                        onClick={() => handleDelete(t)}
+                        disabled={deletingId === t.id}
+                        title="Delete this transaction"
+                        className="text-xs font-medium text-slate-400 hover:text-red-600 disabled:opacity-50"
+                      >
+                        {deletingId === t.id ? "Deleting…" : "Delete"}
+                      </button>
                     </td>
                   </tr>
                 ))}

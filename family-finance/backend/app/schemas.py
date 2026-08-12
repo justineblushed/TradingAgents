@@ -298,18 +298,26 @@ class SignIssueFixResult(BaseModel):
     already_ok: int = 0  # requested but no longer a sign issue by the time this ran
 
 
+class DuplicateTransactionCopy(BaseModel):
+    id: int
+    account_name: str
+
+
 class DuplicateGroup(BaseModel):
     """Two or more transactions already sitting in the database with the
-    same account, date, description, and amount — the kind of duplicate
-    that slips in from a re-uploaded statement imported with "keep
-    duplicates," or two overlapping files covering the same period."""
+    same date, description (case-insensitively), and amount — the kind of
+    duplicate that slips in from a re-uploaded statement imported with
+    "keep duplicates," two overlapping files covering the same period, or
+    the same statement confirmed into the wrong account and then confirmed
+    again into the right one. Copies can span more than one account, so
+    each copy carries its own account name rather than the group having a
+    single one."""
 
     trans_date: date
     description: str
     amount: float
-    account_name: str
     category: str | None = None
-    transaction_ids: list[int]
+    copies: list[DuplicateTransactionCopy]
 
 
 class DuplicateFixRequest(BaseModel):

@@ -17,7 +17,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.db import Base
 from app.models import Account, AccountType, Category, CategoryKind, Transaction
-from app.routers.transactions import list_transactions
+from app.routers.transactions import delete_transaction, list_transactions
 
 MONTH = "2026-07"
 
@@ -110,3 +110,30 @@ def test_no_kind_filter_returns_everything(db):
     _txn(db, date(2026, 7, 20), "PAYMENT THANK YOU", -500.00, "Credit Card Payment")
     rows = list_transactions(month=MONTH, db=db)
     assert len(rows) == 3
+
+
+def test_deleting_a_transaction_removes_it(db):
+    """Lets a user clean up a duplicate the automated finder didn't catch —
+    e.g. two copies that differ enough (or land far enough apart) that
+    they weren't grouped — without going through the Duplicates page."""
+    _txn(db, date(2026, 7, 3), "SAMPLE GROCER", 40.00, "Groceries")
+    txn_id = list_transactions(month=MONTH, db=db)[0].id
+    result = delete_transaction(txn_id, db=db)
+    assert result == {"ok": True}
+    assert list_transactions(month=MONTH, db=db) == []
+
+
+def test_deleting_a_nonexistent_transaction_is_a_404(db):
+    with pytest.raises(HTTPException) as exc_info:
+        delete_transaction(999, db=db)
+    assert exc_info.value.status_code == 404
+
+
+def test_deleting_one_transaction_leaves_others_untouched(db):
+    _txn(db, date(2026, 7, 3), "SAMPLE GROCER", 40.00, "Groceries")
+    _txn(db, date(2026, 7, 15), "PAYROLL DEPOSIT", -3200.00, "Employment Income")
+    rows = list_transactions(month=MONTH, db=db)
+    grocer_id = next(r.id for r in rows if r.description == "SAMPLE GROCER")
+    delete_transaction(grocer_id, db=db)
+    remaining = list_transactions(month=MONTH, db=db)
+    assert [r.description for r in remaining] == ["PAYROLL DEPOSIT"]
