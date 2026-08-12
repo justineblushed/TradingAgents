@@ -17,11 +17,17 @@ import {
   previewStatement,
 } from "@/lib/api";
 import { formatSignedCurrency } from "@/lib/format";
-import { CategoryOptions } from "../category-select";
+import { CategoryOptions } from "./category-select";
 
-export default function UploadPage() {
+export default function UploadForm({
+  initialAccountId,
+  onImported,
+}: {
+  initialAccountId?: number;
+  onImported?: () => void;
+}) {
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [accountId, setAccountId] = useState<number | null>(null);
+  const [accountId, setAccountId] = useState<number | null>(initialAccountId ?? null);
   const [newAccountName, setNewAccountName] = useState("");
   const [newAccountType, setNewAccountType] = useState<AccountType | "">("");
   const [categories, setCategories] = useState<Category[]>([]);
@@ -46,7 +52,11 @@ export default function UploadPage() {
     listAccounts()
       .then((accts) => {
         setAccounts(accts);
-        if (accts.length > 0) setAccountId(accts[0].id);
+        if (initialAccountId && accts.some((a) => a.id === initialAccountId)) {
+          setAccountId(initialAccountId);
+        } else if (accts.length > 0) {
+          setAccountId(accts[0].id);
+        }
       })
       .catch((err) =>
         setMessage(err instanceof Error ? err.message : "Failed to load accounts")
@@ -56,7 +66,7 @@ export default function UploadPage() {
       .catch((err) =>
         setMessage(err instanceof Error ? err.message : "Failed to load categories")
       );
-  }, []);
+  }, [initialAccountId]);
 
   async function handleCreateAccount() {
     if (!newAccountName.trim() || !newAccountType) return;
@@ -127,6 +137,7 @@ export default function UploadPage() {
             : `Imported ${result.imported} transactions.`
         );
         setTransactions(null);
+        onImported?.();
       }
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Failed to import");

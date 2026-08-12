@@ -117,6 +117,62 @@ def test_the_same_merchant_on_two_accounts_stays_two_series():
     assert len(detect_recurring(rows, TODAY)) == 2
 
 
+# --- merging near-identical merchant descriptions ------------------------------
+
+
+def test_two_wordings_of_the_same_bill_merge_into_one_series():
+    """The exact reported bug: the same real subscription split across two
+    description variants, neither of which clears the occurrence threshold
+    on its own, should merge into one series that does."""
+    rows = _monthly("SAMPLE STREAMING.COM", 15.99, 2, start=date(2026, 3, 14)) + _monthly(
+        "SAMPLE STREAMING CANADA", 15.99, 2, start=date(2026, 5, 13)
+    )
+    series = detect_recurring(rows, TODAY)
+    assert len(series) == 1
+    assert series[0].occurrences == 4
+
+
+def test_merge_requires_a_similar_amount_not_just_a_shared_leading_word():
+    """"SAMPLE STORE MEMBERSHIP" and "SAMPLE STORE PURCHASE" share a leading
+    word but are genuinely different charges (a steady annual fee vs.
+    unrelated variable purchases) — a wildly different typical amount
+    should keep them apart even with a shared brand prefix."""
+    membership = _monthly("SAMPLE STORE MEMBERSHIP", 12.00, 4)
+    purchases = _monthly("SAMPLE STORE PURCHASE", 145.00, 4, start=date(2026, 3, 20))
+    series = detect_recurring(membership + purchases, TODAY)
+    assert len(series) == 2
+    assert {s.occurrences for s in series} == {4, 4}
+
+
+def test_merge_never_crosses_accounts():
+    rows = _monthly("SAMPLE STREAMING.COM", 15.99, 2, account_id=1) + _monthly(
+        "SAMPLE STREAMING CANADA", 15.99, 2, account_id=2, start=date(2026, 5, 13)
+    )
+    # Neither variant clears 3 occurrences alone, and they must not merge
+    # across accounts to fake reaching it.
+    assert detect_recurring(rows, TODAY) == []
+
+
+def test_merge_never_crosses_kind():
+    """A coincidental shared leading word between an expense and an income
+    series (e.g. a refund program) must not merge them into one bill."""
+    expense_rows = _monthly("SAMPLE REWARDS FEE", 15.99, 2, kind="expense")
+    income_rows = _monthly(
+        "SAMPLE REWARDS PAYOUT", 15.99, 2, start=date(2026, 5, 13), kind="income"
+    )
+    series = detect_recurring(expense_rows + income_rows, TODAY)
+    assert series == []
+
+
+def test_a_short_shared_leading_word_does_not_trigger_a_merge():
+    """A leading token under 3 characters ("a", "re", ...) is too generic
+    to trust as a brand-name match."""
+    rows = _monthly("A COFFEE SHOP", 4.50, 2, start=date(2026, 3, 14)) + _monthly(
+        "A GROCERY STORE", 4.50, 2, start=date(2026, 5, 13)
+    )
+    assert detect_recurring(rows, TODAY) == []
+
+
 def test_a_cancelled_subscription_stops_being_reported():
     # Ran monthly through last year, then stopped — long past due.
     rows = _monthly("SAMPLE OLD SERVICE", 19.99, 4, start=date(2025, 1, 5))

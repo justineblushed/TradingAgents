@@ -11,17 +11,18 @@ const PRIMARY_LINKS = [
   { href: "/net-worth", label: "Net Worth" },
   { href: "/transactions", label: "Transactions" },
   { href: "/payroll", label: "Payroll" },
+  { href: "/statement-log", label: "Statement Log" },
 ];
 
 // Setup/cleanup tools rather than day-to-day pages — grouped together so
 // they don't compete for attention with the pages actually used day to day.
+// Upload lives only as an action button on Statement Log now, not as its
+// own nav destination.
 const ADMIN_LINKS = [
   { href: "/categories", label: "Categories" },
   { href: "/rules", label: "Rules" },
   { href: "/sign-check", label: "Sign Check" },
   { href: "/duplicates", label: "Duplicates" },
-  { href: "/statement-log", label: "Statement Log" },
-  { href: "/upload", label: "+ Upload Statement" },
 ];
 
 function linkClass(active: boolean) {

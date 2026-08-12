@@ -74,10 +74,10 @@ export default function SignCheckPage() {
           number. This usually happens with a statement imported before the
           app started reconciling a CSV's own sign convention against its
           own — see the note on the{" "}
-          <Link href="/upload" className="font-medium text-brand-600 hover:text-brand-700">
-            Upload page
+          <Link href="/statement-log" className="font-medium text-brand-600 hover:text-brand-700">
+            Statement Log page
           </Link>
-          .
+          , where statements get uploaded.
         </p>
       </div>
 

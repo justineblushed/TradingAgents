@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import {
   DuplicateGroup,
   fixDuplicateTransactions,
@@ -137,14 +138,25 @@ export default function DuplicatesPage() {
                 </div>
                 <div className="mt-2 flex flex-wrap gap-4">
                   {group.transaction_ids.map((id, idx) => (
-                    <label key={id} className="flex items-center gap-1.5 text-xs text-slate-600">
-                      <input
-                        type="checkbox"
-                        checked={selected.has(id)}
-                        onChange={() => toggle(id)}
-                      />
-                      Copy {idx + 1} (id {id}){idx === 0 ? " — kept by default" : ""}
-                    </label>
+                    <div key={id} className="flex items-center gap-1.5 text-xs text-slate-600">
+                      <label className="flex items-center gap-1.5">
+                        <input
+                          type="checkbox"
+                          checked={selected.has(id)}
+                          onChange={() => toggle(id)}
+                        />
+                        Copy {idx + 1} (id {id}){idx === 0 ? " — kept by default" : ""}
+                      </label>
+                      <Link
+                        href={`/transactions?month=${group.trans_date.slice(0, 7)}&highlight=${id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-medium text-brand-600 underline hover:text-brand-700"
+                        title="Open this transaction on the Transactions page in a new tab"
+                      >
+                        View →
+                      </Link>
+                    </div>
                   ))}
                 </div>
               </div>

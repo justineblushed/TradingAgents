@@ -1,11 +1,12 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   Category,
   Tag,
   Transaction,
+  TransactionKind,
   listCategories,
   listTags,
   listTransactions,
@@ -14,6 +15,12 @@ import {
 } from "@/lib/api";
 import { formatCurrency, formatSignedCurrency } from "@/lib/format";
 import { CategoryOptions } from "../category-select";
+
+const KIND_LABELS: Record<"" | TransactionKind, string> = {
+  "": "All",
+  expense: "Spending",
+  income: "Income",
+};
 
 function currentMonth(): string {
   const now = new Date();
@@ -39,8 +46,16 @@ function TransactionsInner() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [tagFilter, setTagFilter] = useState("");
+  const initialKind = searchParams.get("kind");
+  const [kindFilter, setKindFilter] = useState<"" | TransactionKind>(
+    initialKind === "expense" || initialKind === "income" ? initialKind : ""
+  );
   const [error, setError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<number | null>(null);
+  // A transaction landed on from elsewhere (the Duplicates page, say) that
+  // should be scrolled to and visually picked out of the list.
+  const highlightId = Number(searchParams.get("highlight")) || null;
+  const rowRefs = useRef<Map<number, HTMLTableRowElement>>(new Map());
 
   function loadTags() {
     listTags()
@@ -59,10 +74,20 @@ function TransactionsInner() {
     setTransactions(null);
     // A tag spans months (a trip crosses month boundaries), so filtering by
     // one drops the month filter rather than intersecting the two.
-    listTransactions(tagFilter ? undefined : month, tagFilter || undefined)
+    listTransactions(
+      tagFilter ? undefined : month,
+      tagFilter || undefined,
+      kindFilter || undefined
+    )
       .then(setTransactions)
       .catch((e) => setError(e.message));
-  }, [month, tagFilter]);
+  }, [month, tagFilter, kindFilter]);
+
+  useEffect(() => {
+    if (!highlightId || !transactions) return;
+    const row = rowRefs.current.get(highlightId);
+    row?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [highlightId, transactions]);
 
   const activeTag = tags.find((t) => t.name === tagFilter) ?? null;
 
@@ -135,6 +160,18 @@ function TransactionsInner() {
               </option>
             ))}
           </select>
+          <label className="text-sm font-medium text-slate-600">Kind</label>
+          <select
+            value={kindFilter}
+            onChange={(e) => setKindFilter(e.target.value as "" | TransactionKind)}
+            className="rounded-md border border-slate-300 px-2 py-1 text-sm"
+          >
+            {(Object.keys(KIND_LABELS) as ("" | TransactionKind)[]).map((k) => (
+              <option key={k} value={k}>
+                {KIND_LABELS[k]}
+              </option>
+            ))}
+          </select>
         </div>
         {transactions && transactions.length > 0 && (
           <p className="text-sm text-slate-500">
@@ -186,7 +223,16 @@ function TransactionsInner() {
               </thead>
               <tbody>
                 {transactions.map((t) => (
-                  <tr key={t.id} className="border-t border-slate-100">
+                  <tr
+                    key={t.id}
+                    ref={(el) => {
+                      if (el) rowRefs.current.set(t.id, el);
+                      else rowRefs.current.delete(t.id);
+                    }}
+                    className={`border-t border-slate-100 ${
+                      t.id === highlightId ? "bg-amber-50 ring-2 ring-inset ring-amber-300" : ""
+                    }`}
+                  >
                     <td className="py-1.5 pr-2 text-slate-500">{t.trans_date}</td>
                     <td className="pr-2">{t.description}</td>
                     <td

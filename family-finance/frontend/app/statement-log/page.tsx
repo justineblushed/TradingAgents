@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   AccountCoverage,
   CoverageSummary,
@@ -10,6 +10,7 @@ import {
   skipCoverageMonth,
   unskipCoverageMonth,
 } from "@/lib/api";
+import UploadForm from "../upload-form";
 
 // After this many days without a new statement import, an account is
 // highlighted as probably due for one (monthly statements + buffer).
@@ -35,6 +36,9 @@ export default function StatementLogPage() {
   const [coverage, setCoverage] = useState<CoverageSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sortOrder, setSortOrder] = useState<SortOrder>("newest");
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [uploadAccountId, setUploadAccountId] = useState<number | undefined>(undefined);
+  const uploadRef = useRef<HTMLDivElement>(null);
 
   function load() {
     getStatementCoverage()
@@ -43,6 +47,14 @@ export default function StatementLogPage() {
   }
 
   useEffect(load, []);
+
+  function openUpload(accountId?: number) {
+    setUploadAccountId(accountId);
+    setUploadOpen(true);
+    // The section only exists in the DOM once uploadOpen flips true, so
+    // wait a tick before scrolling to it.
+    setTimeout(() => uploadRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+  }
 
   return (
     <div className="space-y-6">
@@ -56,18 +68,40 @@ export default function StatementLogPage() {
             N/A (no statement exists for it).
           </p>
         </div>
-        <div className="flex items-center gap-2 text-sm">
-          <label className="text-slate-500">Sort</label>
-          <select
-            value={sortOrder}
-            onChange={(e) => setSortOrder(e.target.value as SortOrder)}
-            className="rounded-md border border-slate-300 px-2 py-1 text-sm"
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 text-sm">
+            <label className="text-slate-500">Sort</label>
+            <select
+              value={sortOrder}
+              onChange={(e) => setSortOrder(e.target.value as SortOrder)}
+              className="rounded-md border border-slate-300 px-2 py-1 text-sm"
+            >
+              <option value="newest">Newest month first</option>
+              <option value="oldest">Oldest month first</option>
+            </select>
+          </div>
+          <button
+            onClick={() => (uploadOpen ? setUploadOpen(false) : openUpload(undefined))}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium text-white shadow-sm ${
+              uploadOpen ? "bg-brand-700" : "bg-brand-500 hover:bg-brand-600"
+            }`}
           >
-            <option value="newest">Newest month first</option>
-            <option value="oldest">Oldest month first</option>
-          </select>
+            {uploadOpen ? "Close upload" : "+ Upload Statement"}
+          </button>
         </div>
       </div>
+
+      {uploadOpen && (
+        <div ref={uploadRef} className="rounded-xl border border-brand-200 bg-brand-50/40 p-4">
+          <UploadForm
+            initialAccountId={uploadAccountId}
+            onImported={() => {
+              load();
+              setUploadOpen(false);
+            }}
+          />
+        </div>
+      )}
 
       {error && (
         <p className="rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</p>
@@ -80,9 +114,12 @@ export default function StatementLogPage() {
       {coverage && coverage.accounts.length === 0 && (
         <p className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-400 shadow-sm">
           No accounts with statements yet —{" "}
-          <Link href="/upload" className="font-medium text-brand-600 hover:text-brand-700">
+          <button
+            onClick={() => openUpload(undefined)}
+            className="font-medium text-brand-600 hover:text-brand-700"
+          >
             upload your first statement
-          </Link>{" "}
+          </button>{" "}
           to start the log.
         </p>
       )}
@@ -94,6 +131,7 @@ export default function StatementLogPage() {
             account={account}
             sortOrder={sortOrder}
             onChanged={load}
+            onUpload={() => openUpload(account.account_id)}
           />
         ))}
     </div>
@@ -104,10 +142,12 @@ function AccountCard({
   account,
   sortOrder,
   onChanged,
+  onUpload,
 }: {
   account: AccountCoverage;
   sortOrder: SortOrder;
   onChanged: () => void;
+  onUpload: () => void;
 }) {
   const stale =
     account.days_since_last_import !== null &&
@@ -170,12 +210,12 @@ function AccountCard({
       {account.missing_months.length > 0 && (
         <p className="mt-3 text-xs text-slate-500">
           Missing: {missing.map(monthLabel).join(", ")} —{" "}
-          <Link
-            href="/upload"
+          <button
+            onClick={onUpload}
             className="font-medium text-brand-600 hover:text-brand-700"
           >
             upload now
-          </Link>
+          </button>
         </p>
       )}
     </div>

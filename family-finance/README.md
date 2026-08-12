@@ -18,13 +18,16 @@ machine running the backend.
 - A left-hand sidebar holds every page's navigation, with the current
   page marked by a solid colour box rather than just a text-colour
   change — easier to spot at a glance than the old top bar. Day-to-day
-  pages (Dashboard, Cash Flow, Health, Net Worth, Transactions, Payroll)
-  stay at the top level; setup/cleanup tools (Categories, Rules, Sign
-  Check, Duplicates, Statement Log, Upload Statement) live under a
-  collapsible "Admin" section so they don't compete for attention —
-  it auto-expands whenever you're already on one of those pages.
-- Upload a credit-card statement PDF → preview parsed transactions →
-  edit categories inline → confirm import.
+  pages (Dashboard, Cash Flow, Health, Net Worth, Transactions, Payroll,
+  Statement Log) stay at the top level; setup/cleanup tools (Categories,
+  Rules, Sign Check, Duplicates) live under a collapsible "Admin" section
+  so they don't compete for attention — it auto-expands whenever you're
+  already on one of those pages.
+- **Uploading a statement** happens from the Statement Log page (`+
+  Upload Statement` expands the form inline — it isn't a separate page):
+  choose PDF or CSV → preview parsed transactions → edit categories
+  inline → confirm import. A missing month's own "upload now" opens the
+  same form pre-selecting that account.
 - Self-service categories (`/categories` page): add/edit keywords/delete,
   each one tagged `expense`, `income`, or `transfer`.
 - **Category drill-down** (`/categories/<name>`): click any bar in the
@@ -59,7 +62,19 @@ machine running the backend.
   30 days. Both are *inferred*, not scheduled — a charge only appears once
   it has repeated at least three times on a steady enough rhythm, and each
   row shows the evidence behind it. Amounts that move between cycles are
-  shown as a range rather than a single confident number.
+  shown as a range rather than a single confident number. Two description
+  variants of the same real bill (a merchant line that changed wording —
+  "NETFLIX.COM" vs. "NETFLIX CANADA") are merged into one series rather
+  than showing as two separate, individually weaker bills, as long as they
+  share an account, a leading brand word, and a similar typical amount —
+  a coincidental shared word between two genuinely different charges
+  (annual membership fee vs. unrelated purchases at the same store) isn't
+  enough on its own.
+- The Dashboard's **Spending** and **Income** figures, and every category
+  node on the **Cash Flow Sankey**, link through to the Transactions page
+  filtered to exactly what made up that number — the same
+  `is_spending`/`is_income` logic used to compute the totals themselves,
+  so the drill-through can never disagree with the figure it came from.
 - **Cash Flow Sankey** (`/cash-flow`): income sources flow into a hub, then
   out to spending groups and their categories, plus whatever's left over
   to Savings. Node colours are the same ones used everywhere else in the
@@ -90,7 +105,10 @@ machine running the backend.
   group is left unchecked by default; the rest are pre-checked for
   removal, but a genuinely repeated same-day charge (two identical
   parking tickets, say) looks identical from the data alone, so it's
-  worth a glance before removing anything.
+  worth a glance before removing anything. Each copy has a **View →**
+  link that opens the Transactions page with that exact row highlighted
+  and scrolled into view, so you can check its surrounding context
+  before deciding what to remove.
 - Every category picker in the app (Transactions, the Upload review
   table, Rules) is grouped the same way the Categories page itself
   groups them — by group (Housing, Transportation, ...), then Income,

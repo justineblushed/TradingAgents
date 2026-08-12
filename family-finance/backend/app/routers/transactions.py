@@ -1,6 +1,7 @@
 from collections import defaultdict
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.dateutil import month_bounds
@@ -37,6 +38,7 @@ def list_transactions(
     month: str | None = None,
     tag: str | None = None,
     category: str | None = None,
+    kind: str | None = None,
     db: Session = Depends(get_db),
 ):
     query = db.query(Transaction).options(
@@ -54,6 +56,25 @@ def list_transactions(
         if record is None:
             raise HTTPException(404, f"No category named {category!r}")
         query = query.filter(Transaction.category_id == record.id)
+    if kind == "expense":
+        # Matches the is_spending logic used everywhere else (dashboard
+        # summary, Sankey): an uncategorized row with a positive amount
+        # reads as spending too, same as this app's own sign convention.
+        query = query.filter(
+            or_(
+                Transaction.category.has(Category.kind == CategoryKind.expense),
+                and_(Transaction.category_id.is_(None), Transaction.amount > 0),
+            )
+        )
+    elif kind == "income":
+        query = query.filter(
+            or_(
+                Transaction.category.has(Category.kind == CategoryKind.income),
+                and_(Transaction.category_id.is_(None), Transaction.amount < 0),
+            )
+        )
+    elif kind is not None:
+        raise HTTPException(400, "kind must be 'expense' or 'income'")
     rows = query.order_by(Transaction.trans_date).all()
     return [_to_out(r) for r in rows]
 

@@ -198,8 +198,18 @@ export default function DashboardPage() {
       {summary && (
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <StatCard label="Spending" value={summary.total_spending} tone="expense" />
-            <StatCard label="Income" value={summary.total_income} tone="income" />
+            <StatCard
+              label="Spending"
+              value={summary.total_spending}
+              tone="expense"
+              onSelect={() => router.push(`/transactions?month=${month}&kind=expense`)}
+            />
+            <StatCard
+              label="Income"
+              value={summary.total_income}
+              tone="income"
+              onSelect={() => router.push(`/transactions?month=${month}&kind=income`)}
+            />
             <StatCard label="Net Cash Flow" value={summary.net_cash_flow} tone="neutral" />
           </div>
           <p className="text-xs text-slate-400">
@@ -661,10 +671,12 @@ function StatCard({
   label,
   value,
   tone,
+  onSelect,
 }: {
   label: string;
   value: number;
   tone: "expense" | "income" | "neutral";
+  onSelect?: () => void;
 }) {
   const color =
     tone === "expense"
@@ -672,13 +684,20 @@ function StatCard({
       : tone === "income"
       ? "text-green-600"
       : "text-slate-800";
+  const Wrapper = onSelect ? "button" : "div";
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <Wrapper
+      onClick={onSelect}
+      className={`rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm ${
+        onSelect ? "cursor-pointer hover:border-brand-300 hover:shadow-md" : ""
+      }`}
+    >
       <p className="text-sm text-slate-500">{label}</p>
       <p className={`mt-1 text-2xl font-semibold ${color}`}>
         {formatSignedCurrency(value)}
       </p>
-    </div>
+      {onSelect && <p className="mt-1 text-xs text-brand-600">See transactions →</p>}
+    </Wrapper>
   );
 }
 

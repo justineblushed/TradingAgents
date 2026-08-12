@@ -108,6 +108,71 @@ def _amount_spread(amounts: list[float]) -> tuple[float, bool]:
     return typical, (worst / abs(typical)) > 0.15
 
 
+def _leading_token(key: str) -> str:
+    return key.split(" ", 1)[0] if key else ""
+
+
+def _merge_similar_merchant_groups(
+    groups: dict[tuple[str, int], list[dict]]
+) -> dict[tuple[str, int], list[dict]]:
+    """Two raw description strings can be the same real bill under
+    different wording — "NETFLIX.COM" and "NETFLIX CANADA" normalize to
+    different keys since normalize_description only strips numbers and
+    punctuation, not a whole trailing word. Left alone, that can split one
+    real bill into two groups that individually might not even clear the
+    occurrence threshold, showing as two "upcoming bills" for one
+    subscription, or as neither if each half falls short on its own.
+
+    Merged conservatively: same account, same leading word (the brand name
+    is almost always first in a real statement line), a similar-enough
+    typical charge amount, and the same kind — so a coincidental shared
+    word ("AMAZON.CA" general purchases vs "AMAZON PRIME") doesn't merge
+    two genuinely different charges just because they start the same way.
+    """
+
+    def typical_abs_amount(items: list[dict]) -> float:
+        return statistics.median(abs(float(i["amount"])) for i in items)
+
+    def predominant_kind(items: list[dict]) -> str:
+        return statistics.mode([i.get("kind") or "expense" for i in items])
+
+    keys = list(groups.keys())
+    parent = {k: k for k in keys}
+
+    def find(k: tuple[str, int]) -> tuple[str, int]:
+        while parent[k] != k:
+            k = parent[k]
+        return k
+
+    def union(a: tuple[str, int], b: tuple[str, int]) -> None:
+        root_a, root_b = find(a), find(b)
+        if root_a != root_b:
+            parent[root_a] = root_b
+
+    for i, key_a in enumerate(keys):
+        norm_a, account_a = key_a
+        token_a = _leading_token(norm_a)
+        if len(token_a) < 3:
+            continue
+        for key_b in keys[i + 1 :]:
+            norm_b, account_b = key_b
+            if account_b != account_a or _leading_token(norm_b) != token_a:
+                continue
+            if predominant_kind(groups[key_a]) != predominant_kind(groups[key_b]):
+                continue
+            amount_a = typical_abs_amount(groups[key_a])
+            amount_b = typical_abs_amount(groups[key_b])
+            lo, hi = min(amount_a, amount_b), max(amount_a, amount_b)
+            if lo <= 0 or (hi - lo) / lo > 0.15:
+                continue
+            union(key_a, key_b)
+
+    merged: dict[tuple[str, int], list[dict]] = {}
+    for key in keys:
+        merged.setdefault(find(key), []).extend(groups[key])
+    return merged
+
+
 def detect_recurring(
     rows: list[dict],
     today: date,
@@ -125,6 +190,8 @@ def detect_recurring(
         if not key:
             continue
         groups.setdefault((key, row["account_id"]), []).append(row)
+
+    groups = _merge_similar_merchant_groups(groups)
 
     series: list[RecurringSeries] = []
     for (key, account_id), items in groups.items():

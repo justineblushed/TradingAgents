@@ -421,6 +421,8 @@ export type Transaction = {
   tags: string[];
 };
 
+export type TransactionKind = "expense" | "income";
+
 export type PayStubFields = {
   employer: string;
   earner: string;
@@ -944,11 +946,13 @@ export async function getHealthScore(): Promise<HealthScore> {
 
 export async function listTransactions(
   month?: string,
-  tag?: string
+  tag?: string,
+  kind?: TransactionKind
 ): Promise<Transaction[]> {
   const params = new URLSearchParams();
   if (month) params.set("month", month);
   if (tag) params.set("tag", tag);
+  if (kind) params.set("kind", kind);
   const qs = params.toString() ? `?${params.toString()}` : "";
   return asJson(await fetch(`${API_BASE}/transactions${qs}`));
 }
