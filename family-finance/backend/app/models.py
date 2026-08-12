@@ -45,6 +45,11 @@ class AccountType(str, enum.Enum):
     tfsa = "tfsa"
     rrsp = "rrsp"
     resp = "resp"
+    # Paired conceptually with mortgage/car_loan below: the loan is what
+    # you owe, this is what it bought — recording both is what makes net
+    # worth reflect reality instead of just the debt side.
+    real_estate = "real_estate"
+    vehicle = "vehicle"
     other_asset = "other_asset"
     # Liabilities
     credit_card = "credit_card"

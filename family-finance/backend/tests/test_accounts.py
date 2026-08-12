@@ -39,6 +39,19 @@ def _account(db, name, account_type):
     return account
 
 
+# --- Real Estate / Vehicle are assets, paired with Mortgage / Car Loan ------
+
+
+def test_real_estate_is_an_asset_not_a_liability(db):
+    account = _account(db, "Sample House", AccountType.real_estate)
+    assert account.is_liability is False
+
+
+def test_vehicle_is_an_asset_not_a_liability(db):
+    account = _account(db, "Sample Car", AccountType.vehicle)
+    assert account.is_liability is False
+
+
 # --- create assigns an incrementing sort_order -------------------------------
 
 

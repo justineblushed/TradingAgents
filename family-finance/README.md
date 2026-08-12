@@ -17,7 +17,12 @@ machine running the backend.
 
 - A left-hand sidebar holds every page's navigation, with the current
   page marked by a solid colour box rather than just a text-colour
-  change — easier to spot at a glance than the old top bar.
+  change — easier to spot at a glance than the old top bar. Day-to-day
+  pages (Dashboard, Cash Flow, Health, Net Worth, Transactions, Payroll)
+  stay at the top level; setup/cleanup tools (Categories, Rules, Sign
+  Check, Duplicates, Statement Log, Upload Statement) live under a
+  collapsible "Admin" section so they don't compete for attention —
+  it auto-expands whenever you're already on one of those pages.
 - Upload a credit-card statement PDF → preview parsed transactions →
   edit categories inline → confirm import.
 - Self-service categories (`/categories` page): add/edit keywords/delete,
@@ -91,17 +96,6 @@ machine running the backend.
   groups them — by group (Housing, Transportation, ...), then Income,
   then Transfer — instead of one flat alphabetical list that cuts across
   groups and kinds.
-- **Spending Calendar** (`/calendar`): a month grid shaded by that day's
-  spending, scaled against the month's own highest-spending day rather
-  than a fixed dollar amount, so a quiet month and a big one both use the
-  full range of shading. A green dot marks a day money came in. The grid
-  always starts on Monday and ends on Sunday, so a few days from the
-  adjacent month pad the front/back — those days keep their real
-  transaction data (a padding-day purchase isn't hidden or zeroed) but are
-  visually dimmed and excluded from the month's own totals, which are
-  computed the same way as the Dashboard's so the two can never disagree.
-  Clicking any day, including a padding one, opens its transactions inline
-  and links through to the Transactions page filtered to that month.
 - **Cash flow vs. balance sheet are modeled separately, on purpose:**
   - *Cash flow* (`/dashboard`, `/transactions`): spending and income for
     a month, computed from imported transactions. Transactions in a
@@ -128,6 +122,12 @@ machine running the backend.
     only once it has no transactions or balance snapshots left attached,
     and each list has its own move up/down controls so Assets and
     Liabilities can be ordered independently of alphabetical.
+  - A mortgage or car loan is legitimately a liability — the loan itself
+    isn't the asset, the home or car it bought is. Real Estate and
+    Vehicle asset types exist for exactly that pairing; if you've
+    recorded a Mortgage or Car Loan but not its paired asset, a banner
+    on the Net Worth page says so (net worth otherwise only ever shows
+    the debt side of a purchase, never what it bought).
 - **Payroll & tax** (`/payroll`): a bank statement only shows the net
   deposit, which hides everything you actually paid. Pay stubs are
   uploaded (best-effort PDF read, every field editable before saving) or
@@ -144,9 +144,10 @@ machine running the backend.
   income, credits beyond the basic personal amount, spousal transfers, or
   your CRA carry-forward (which you can enter from your NOA).
 - Accounts cover both sides of the balance sheet: cash, chequing,
-  savings, investment, TFSA, RRSP, RESP (assets) and credit card,
-  mortgage, car loan (liabilities). Credit cards optionally track a
-  credit limit for an "available credit" figure. Every type selector
+  savings, investment, TFSA, RRSP, RESP, real estate, vehicle (assets)
+  and credit card, mortgage, car loan (liabilities). Credit cards
+  optionally track a credit limit for an "available credit" figure.
+  Every type selector
   shows a one-line caption for whichever type is picked — e.g.
   "Investment" is specifically a non-registered (taxable) brokerage
   account, as distinct from a TFSA/RRSP/RESP, which each get their own

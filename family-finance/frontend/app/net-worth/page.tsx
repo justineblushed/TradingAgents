@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ACCOUNT_TYPE_HINTS,
   ACCOUNT_TYPE_LABELS,
@@ -28,6 +28,7 @@ export default function NetWorthPage() {
   const [newName, setNewName] = useState("");
   const [newType, setNewType] = useState<AccountType>("chequing");
   const [newCreditLimit, setNewCreditLimit] = useState("");
+  const newNameInputRef = useRef<HTMLInputElement>(null);
 
   function load() {
     getNetWorthSummary()
@@ -59,6 +60,25 @@ export default function NetWorthPage() {
   const assets = summary?.accounts.filter((a) => !a.is_liability) ?? [];
   const liabilities = summary?.accounts.filter((a) => a.is_liability) ?? [];
 
+  const hasType = (type: AccountType) =>
+    summary?.accounts.some((a) => a.account_type === type) ?? false;
+  // A mortgage or car loan is legitimately a liability — the loan itself
+  // isn't the asset. But without the paired asset (the home's or car's own
+  // value) recorded too, net worth only ever shows the debt side and never
+  // looks like it's supposed to.
+  const missingPairs: { liability: string; asset: AccountType; label: string }[] = [];
+  if (hasType("mortgage") && !hasType("real_estate")) {
+    missingPairs.push({ liability: "a Mortgage", asset: "real_estate", label: "Real Estate" });
+  }
+  if (hasType("car_loan") && !hasType("vehicle")) {
+    missingPairs.push({ liability: "a Car Loan", asset: "vehicle", label: "Vehicle" });
+  }
+
+  function suggestType(type: AccountType) {
+    setNewType(type);
+    newNameInputRef.current?.focus();
+  }
+
   return (
     <div className="space-y-6">
       {message && (
@@ -70,6 +90,25 @@ export default function NetWorthPage() {
       ) : summary ? (
         <NetWorthHeader summary={summary} />
       ) : null}
+
+      {missingPairs.length > 0 && (
+        <div className="space-y-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          {missingPairs.map((pair) => (
+            <p key={pair.asset} className="flex flex-wrap items-center justify-between gap-2">
+              <span>
+                You have {pair.liability} but no {pair.label} asset — the loan is what you
+                owe, not what it bought, so net worth only shows half the picture without it.
+              </span>
+              <button
+                onClick={() => suggestType(pair.asset)}
+                className="shrink-0 font-medium text-amber-900 underline hover:text-amber-700"
+              >
+                Add a {pair.label} account
+              </button>
+            </p>
+          ))}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <AccountGroup title="Assets" accounts={assets} onSaved={load} onError={setMessage} />
@@ -85,6 +124,7 @@ export default function NetWorthPage() {
         <h2 className="mb-3 text-sm font-medium text-slate-600">Add an account</h2>
         <div className="flex flex-wrap items-end gap-3">
           <input
+            ref={newNameInputRef}
             placeholder="e.g. RBC Savings"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}

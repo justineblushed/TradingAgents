@@ -23,6 +23,8 @@ export const ASSET_ACCOUNT_TYPES = [
   "tfsa",
   "rrsp",
   "resp",
+  "real_estate",
+  "vehicle",
   "other_asset",
 ] as const;
 
@@ -45,6 +47,8 @@ export const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
   tfsa: "TFSA",
   rrsp: "RRSP",
   resp: "RESP",
+  real_estate: "Real Estate",
+  vehicle: "Vehicle",
   other_asset: "Other asset",
   credit_card: "Credit Card",
   mortgage: "Mortgage",
@@ -64,6 +68,10 @@ export const ACCOUNT_TYPE_HINTS: Record<AccountType, string> = {
   tfsa: "Tax-Free Savings Account — registered; growth and withdrawals are tax-free.",
   rrsp: "Registered Retirement Savings Plan — registered; contributions are tax-deductible.",
   resp: "Registered Education Savings Plan — registered; for a child's education.",
+  real_estate:
+    "The current value of a property you own — pairs with a Mortgage liability, since the loan and the home it bought are two separate sides of the same picture.",
+  vehicle:
+    "The current value of a vehicle you own — pairs with a Car Loan liability the same way.",
   other_asset: "Anything else you own that doesn't fit the types above.",
   credit_card: "A credit card balance — what you currently owe.",
   mortgage: "Your home loan balance.",
@@ -786,26 +794,6 @@ export type SankeyLinkData = {
   value: number;
 };
 
-export type CalendarDay = {
-  date: string;
-  in_month: boolean;
-  spending: number;
-  income: number;
-  transaction_count: number;
-};
-
-export type CalendarSummary = {
-  month: string;
-  days: CalendarDay[];
-  max_daily_spending: number;
-  total_spending: number;
-  total_income: number;
-};
-
-export async function getCalendar(month?: string): Promise<CalendarSummary> {
-  const qs = month ? `?month=${month}` : "";
-  return asJson(await fetch(`${API_BASE}/dashboard/calendar${qs}`));
-}
 
 export type SankeySummary = {
   month: string;
