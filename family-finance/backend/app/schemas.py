@@ -24,6 +24,19 @@ class StatementPreview(BaseModel):
     flip_amount_sign_applied: bool | None = None
 
 
+class ResetAllRequest(BaseModel):
+    # Requires an explicit true rather than defaulting to it, so this can
+    # never fire from an empty or malformed request body.
+    confirm: bool = False
+
+
+class ResetAllResult(BaseModel):
+    deleted_transactions: int
+    deleted_statements: int
+    deleted_coverage_skips: int
+    accounts_reset: int
+
+
 class ImportRequest(BaseModel):
     account_id: int
     period_label: str = ""
@@ -437,6 +450,12 @@ class AccountUpdate(BaseModel):
     account_type: str | None = None
     last_four: str | None = None
     credit_limit: float | None = None
+    # Explicit override for the account's single-Amount-column CSV sign
+    # convention (see Account.csv_amount_sign_flipped): True = needs
+    # flipping, False = already matches this app, None = let the next
+    # import's heuristic decide and lock itself in. Setting this directly
+    # skips relying on whichever file gets confirmed first.
+    csv_amount_sign_flipped: bool | None = None
 
 
 class AccountMoveRequest(BaseModel):
@@ -447,6 +466,7 @@ class AccountOut(AccountCreate):
     id: int
     is_liability: bool = False
     sort_order: int | None = None
+    csv_amount_sign_flipped: bool | None = None
 
     class Config:
         from_attributes = True
@@ -476,6 +496,7 @@ class AccountWithBalance(BaseModel):
     current_balance: float | None = None
     balance_as_of: date | None = None
     balance_is_estimated: bool = False
+    csv_amount_sign_flipped: bool | None = None
 
 
 class NetWorthSummary(BaseModel):

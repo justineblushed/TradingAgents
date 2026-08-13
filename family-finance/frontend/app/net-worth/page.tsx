@@ -282,6 +282,16 @@ function AccountRow({
   const [editingInfo, setEditingInfo] = useState(false);
   const [editName, setEditName] = useState(account.name);
   const [editType, setEditType] = useState<AccountType>(account.account_type);
+  // "" = let the next import's heuristic decide and lock itself in;
+  // "true"/"false" state the account's real CSV convention directly,
+  // instead of hoping the first re-uploaded file guesses it correctly.
+  const [editSignConvention, setEditSignConvention] = useState<"" | "true" | "false">(
+    account.csv_amount_sign_flipped === null
+      ? ""
+      : account.csv_amount_sign_flipped
+      ? "true"
+      : "false"
+  );
   const [savingInfo, setSavingInfo] = useState(false);
   const [infoError, setInfoError] = useState<string | null>(null);
 
@@ -310,7 +320,12 @@ function AccountRow({
     setSavingInfo(true);
     setInfoError(null);
     try {
-      await updateAccount(account.id, { name: editName.trim(), account_type: editType });
+      await updateAccount(account.id, {
+        name: editName.trim(),
+        account_type: editType,
+        csv_amount_sign_flipped:
+          editSignConvention === "" ? null : editSignConvention === "true",
+      });
       setEditingInfo(false);
       onSaved();
     } catch (err) {
@@ -461,6 +476,13 @@ function AccountRow({
                 setEditingInfo(false);
                 setEditName(account.name);
                 setEditType(account.account_type);
+                setEditSignConvention(
+                  account.csv_amount_sign_flipped === null
+                    ? ""
+                    : account.csv_amount_sign_flipped
+                    ? "true"
+                    : "false"
+                );
               }}
               className="text-xs text-slate-400 hover:text-slate-600"
             >
@@ -468,6 +490,24 @@ function AccountRow({
             </button>
           </div>
           <p className="text-xs text-slate-400">{ACCOUNT_TYPE_HINTS[editType]}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="text-xs text-slate-500">CSV sign convention</label>
+            <select
+              value={editSignConvention}
+              onChange={(e) => setEditSignConvention(e.target.value as "" | "true" | "false")}
+              className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+            >
+              <option value="">Let the app guess (default)</option>
+              <option value="false">Already matches this app (charges positive)</option>
+              <option value="true">Needs signs flipped (ledger convention)</option>
+            </select>
+          </div>
+          <p className="text-xs text-slate-400">
+            Only matters for a CSV with a single "Amount" column. Setting
+            this directly states the account's real convention instead of
+            hoping the next import's guess gets it right — useful after a
+            sign bug, or before re-uploading statements from scratch.
+          </p>
           {infoError && <p className="text-xs text-red-600">{infoError}</p>}
         </div>
       ) : confirmingDelete ? (

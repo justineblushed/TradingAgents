@@ -89,6 +89,46 @@ def test_editing_a_nonexistent_account_404s(db):
     assert exc_info.value.status_code == 404
 
 
+# --- explicit CSV sign-convention override -----------------------------------
+#
+# Besides being locked in automatically from an account's first CSV import
+# (see test_statements.py), the convention can be set directly — so a user
+# doesn't have to hope the first re-uploaded file after a reset guesses
+# correctly, they can just state the truth once.
+
+
+def test_convention_can_be_set_directly_to_needs_flipping(db):
+    account = _account(db, "Sample Chequing", AccountType.chequing)
+    updated = update_account(
+        account.id, AccountUpdate(csv_amount_sign_flipped=True), db=db
+    )
+    assert updated.csv_amount_sign_flipped is True
+
+
+def test_convention_can_be_set_directly_to_already_matches(db):
+    account = _account(db, "Sample Chequing", AccountType.chequing)
+    updated = update_account(
+        account.id, AccountUpdate(csv_amount_sign_flipped=False), db=db
+    )
+    assert updated.csv_amount_sign_flipped is False
+
+
+def test_convention_can_be_reset_back_to_auto_detect(db):
+    account = _account(db, "Sample Chequing", AccountType.chequing)
+    update_account(account.id, AccountUpdate(csv_amount_sign_flipped=True), db=db)
+    updated = update_account(
+        account.id, AccountUpdate(csv_amount_sign_flipped=None), db=db
+    )
+    assert updated.csv_amount_sign_flipped is None
+
+
+def test_editing_an_unrelated_field_leaves_the_convention_untouched(db):
+    account = _account(db, "Sample Chequing", AccountType.chequing)
+    update_account(account.id, AccountUpdate(csv_amount_sign_flipped=True), db=db)
+    updated = update_account(account.id, AccountUpdate(name="Renamed"), db=db)
+    assert updated.csv_amount_sign_flipped is True
+
+
 # --- deleting is blocked while an account still has real data ---------------
 
 

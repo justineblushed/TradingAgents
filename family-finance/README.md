@@ -121,7 +121,22 @@ machine running the backend.
   account's first such CSV is confirmed, its decision is remembered
   (`Account.csv_amount_sign_flipped`); every later import for that account
   trusts it instead of re-guessing, so this specific failure mode can't
-  recur for an account after its first import.
+  recur for an account after its first import. It can also be set
+  directly — editing an account on the Net Worth page has a "CSV sign
+  convention" selector ("let the app guess" / "already matches this app" /
+  "needs signs flipped") — so re-uploading statements after a reset
+  doesn't have to hope the first file's guess is the right one.
+- **Clearing everything and starting over**: for when a sign or import
+  mistake left too many rows wrong across too many accounts to review one
+  at a time, the Statement Log page has a "Danger zone" — type
+  `DELETE ALL` to enable a button that permanently deletes every imported
+  transaction and statement-log record across every account, and clears
+  each account's learned sign convention along with them (set the
+  convention selector above first if a re-guess would just repeat the
+  same mistake). Accounts, categories, rules, tags, pay stubs, and
+  manually-recorded net worth balances all survive it untouched — only
+  what statement imports produced gets removed. Re-upload each account's
+  statements afterward to rebuild from a clean slate.
 - **Duplicates** (`/duplicates`): finds transactions already sitting in
   the database more than once with the same date, description, and
   amount — the kind that slips in from a re-uploaded statement kept on

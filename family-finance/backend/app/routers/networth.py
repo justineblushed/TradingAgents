@@ -60,6 +60,7 @@ def summary(db: Session = Depends(get_db)):
                 current_balance=balance,
                 balance_as_of=as_of,
                 balance_is_estimated=estimated,
+                csv_amount_sign_flipped=account.csv_amount_sign_flipped,
             )
         )
 

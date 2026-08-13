@@ -7,6 +7,7 @@ import {
   CoverageSummary,
   MonthCoverage,
   getStatementCoverage,
+  resetAllTransactions,
   skipCoverageMonth,
   unskipCoverageMonth,
 } from "@/lib/api";
@@ -134,6 +135,116 @@ export default function StatementLogPage() {
             onUpload={() => openUpload(account.account_id)}
           />
         ))}
+
+      {coverage && <DangerZone onReset={load} />}
+    </div>
+  );
+}
+
+const RESET_CONFIRM_PHRASE = "DELETE ALL";
+
+function DangerZone({ onReset }: { onReset: () => void }) {
+  const [expanded, setExpanded] = useState(false);
+  const [typed, setTyped] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const canConfirm = typed === RESET_CONFIRM_PHRASE;
+
+  async function handleReset() {
+    if (!canConfirm) return;
+    const confirmed = window.confirm(
+      "This permanently deletes every imported transaction and statement " +
+        "record across every account, and clears each account's learned " +
+        "sign convention along with them. Accounts, categories, rules, " +
+        "and net worth balances are kept. This cannot be undone. Continue?"
+    );
+    if (!confirmed) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await resetAllTransactions();
+      setMessage(
+        `Deleted ${result.deleted_transactions} transaction${
+          result.deleted_transactions === 1 ? "" : "s"
+        } and ${result.deleted_statements} statement record${
+          result.deleted_statements === 1 ? "" : "s"
+        } across every account. Re-upload each account's statements to start over.`
+      );
+      setTyped("");
+      setExpanded(false);
+      onReset();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to reset");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-red-200 bg-red-50/40 p-4">
+      {message && (
+        <p className="mb-3 rounded-md bg-brand-50 p-3 text-sm text-brand-700">{message}</p>
+      )}
+      {error && <p className="mb-3 rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+
+      {!expanded ? (
+        <button
+          onClick={() => setExpanded(true)}
+          className="text-sm font-medium text-red-700 hover:text-red-800"
+        >
+          Danger zone: clear all transaction data
+        </button>
+      ) : (
+        <div className="space-y-3">
+          <div>
+            <h2 className="text-sm font-medium text-red-800">
+              Clear all transaction data and start over
+            </h2>
+            <p className="mt-1 text-xs text-red-700">
+              For when a sign or import mistake left too many rows wrong to
+              review one at a time. This permanently deletes every imported
+              transaction and statement record across every account, and
+              clears each account's learned sign convention so a fresh
+              re-upload isn't stuck reusing a bad guess. Accounts,
+              categories, rules, tags, pay stubs, and net worth balances are
+              kept — only what statement imports produced gets removed.
+              Re-upload each account's statements afterward to rebuild.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="text-xs text-red-700">
+              Type <span className="font-mono font-semibold">{RESET_CONFIRM_PHRASE}</span> to
+              enable:
+            </label>
+            <input
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              className="rounded-md border border-red-300 px-2 py-1 text-sm"
+              autoComplete="off"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleReset}
+              disabled={!canConfirm || busy}
+              className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
+            >
+              {busy ? "Clearing…" : "Clear all transaction data"}
+            </button>
+            <button
+              onClick={() => {
+                setExpanded(false);
+                setTyped("");
+              }}
+              disabled={busy}
+              className="px-3 py-2 text-sm text-slate-500 hover:text-slate-700"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

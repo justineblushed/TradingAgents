@@ -17,12 +17,19 @@ from app.models import (
     Category,
     CategoryRule,
     CategorySource,
+    CoverageSkip,
     Statement,
     Transaction,
 )
 from app.parsers.creditcard_statement import parse_credit_card_statement
 from app.parsers.csv_statement import parse_csv_statement
-from app.schemas import ImportRequest, ParsedTransaction, StatementPreview
+from app.schemas import (
+    ImportRequest,
+    ParsedTransaction,
+    ResetAllRequest,
+    ResetAllResult,
+    StatementPreview,
+)
 
 router = APIRouter(prefix="/statements", tags=["statements"])
 
@@ -208,3 +215,39 @@ def confirm_statement(payload: ImportRequest, db: Session = Depends(get_db)):
         "imported": len(to_import),
         "skipped_duplicates": skipped,
     }
+
+
+@router.post("/reset-all", response_model=ResetAllResult)
+def reset_all_transactions(payload: ResetAllRequest, db: Session = Depends(get_db)):
+    """Delete every imported transaction, statement-log record, and
+    coverage skip across every account, and clear each account's
+    established CSV sign convention along with them — a clean slate for
+    re-uploading every statement from scratch. Accounts, categories,
+    rules, tags, pay stubs, and manually-recorded net worth balances are
+    untouched; this only undoes what statement imports produced.
+
+    Requires an explicit confirm=true so it can never fire by accident.
+    """
+    if not payload.confirm:
+        raise HTTPException(400, "confirm must be true")
+
+    deleted_transactions = db.query(Transaction).count()
+    for txn in db.query(Transaction).all():
+        # ORM-level delete (not a bulk query.delete()) so the tags
+        # association table gets cleaned up along with each row.
+        db.delete(txn)
+
+    deleted_statements = db.query(Statement).delete()
+    deleted_coverage_skips = db.query(CoverageSkip).delete()
+    accounts_reset = (
+        db.query(Account)
+        .filter(Account.csv_amount_sign_flipped.is_not(None))
+        .update({"csv_amount_sign_flipped": None})
+    )
+    db.commit()
+    return ResetAllResult(
+        deleted_transactions=deleted_transactions,
+        deleted_statements=deleted_statements,
+        deleted_coverage_skips=deleted_coverage_skips,
+        accounts_reset=accounts_reset,
+    )

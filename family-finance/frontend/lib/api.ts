@@ -89,6 +89,10 @@ export type Account = {
   credit_limit: number | null;
   is_liability: boolean;
   sort_order: number | null;
+  // Explicit CSV sign-convention override — null means "let the next
+  // import's heuristic decide and lock itself in" (see the Statement Log
+  // page's convention selector).
+  csv_amount_sign_flipped: boolean | null;
 };
 
 export type DashboardSummary = {
@@ -233,6 +237,7 @@ export type AccountWithBalance = {
   current_balance: number | null;
   balance_as_of: string | null;
   balance_is_estimated: boolean;
+  csv_amount_sign_flipped: boolean | null;
 };
 
 export type NetWorthSummary = {
@@ -585,6 +590,7 @@ export async function updateAccount(
     account_type: AccountType;
     last_four: string;
     credit_limit: number | null;
+    csv_amount_sign_flipped: boolean | null;
   }>
 ): Promise<Account> {
   return asJson(
@@ -707,6 +713,23 @@ export async function confirmStatement(
   }
   const body = await asJson<{ imported: number; skipped_duplicates: number }>(res);
   return { status: "ok", ...body };
+}
+
+export type ResetAllResult = {
+  deleted_transactions: number;
+  deleted_statements: number;
+  deleted_coverage_skips: number;
+  accounts_reset: number;
+};
+
+export async function resetAllTransactions(): Promise<ResetAllResult> {
+  return asJson(
+    await fetch(`${API_BASE}/statements/reset-all`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirm: true }),
+    })
+  );
 }
 
 export async function getDashboardSummary(month?: string): Promise<DashboardSummary> {
