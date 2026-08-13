@@ -13,6 +13,7 @@ export type StatementPreview = {
   account_last_four: string;
   transactions: ParsedTransaction[];
   warnings: string[];
+  flip_amount_sign_applied: boolean | null;
 };
 
 export const ASSET_ACCOUNT_TYPES = [
@@ -659,11 +660,13 @@ export async function unskipCoverageMonth(accountId: number, month: string): Pro
 
 export async function previewStatement(
   file: File,
-  statementYear: number
+  statementYear: number,
+  accountId?: number | null
 ): Promise<StatementPreview> {
   const form = new FormData();
   form.append("file", file);
   form.append("statement_year", String(statementYear));
+  if (accountId) form.append("account_id", String(accountId));
   return asJson(
     await fetch(`${API_BASE}/statements/preview`, {
       method: "POST",
@@ -680,7 +683,8 @@ export async function confirmStatement(
   accountId: number,
   periodLabel: string,
   transactions: ParsedTransaction[],
-  onDuplicate: "block" | "skip" | "import" = "block"
+  onDuplicate: "block" | "skip" | "import" = "block",
+  amountSignFlipped?: boolean | null
 ): Promise<ConfirmResult> {
   const res = await fetch(`${API_BASE}/statements/confirm`, {
     method: "POST",
@@ -690,6 +694,7 @@ export async function confirmStatement(
       period_label: periodLabel,
       transactions,
       on_duplicate: onDuplicate,
+      amount_sign_flipped: amountSignFlipped ?? null,
     }),
   });
   if (res.status === 409) {
@@ -812,6 +817,8 @@ export async function getSankey(month?: string): Promise<SankeySummary> {
   return asJson(await fetch(`${API_BASE}/dashboard/sankey${qs}`));
 }
 
+export type SignIssueDirection = "income_positive" | "expense_negative";
+
 export type SignIssue = {
   id: number;
   trans_date: string;
@@ -819,6 +826,7 @@ export type SignIssue = {
   amount: number;
   category: string;
   account_name: string;
+  direction: SignIssueDirection;
 };
 
 export type SignIssueFixResult = {

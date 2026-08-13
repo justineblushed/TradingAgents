@@ -2,6 +2,7 @@ import enum
 from datetime import date, datetime
 
 from sqlalchemy import (
+    Boolean,
     Column,
     Date,
     DateTime,
@@ -118,6 +119,13 @@ class Account(Base):
     # Manual display order within its own Assets/Liabilities group on the Net
     # Worth page. Nullable so older rows can be backfilled by migration.
     sort_order: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Whether a single-column "Amount" CSV for this account needs its sign
+    # flipped to match this app's convention. Null until the account's first
+    # such CSV is confirmed, at which point that import's own flip decision
+    # is locked in here — every later import for the same account then
+    # trusts this instead of re-guessing per file (see
+    # csv_statement._should_flip_single_amount_column).
+    csv_amount_sign_flipped: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
 
     transactions: Mapped[list["Transaction"]] = relationship(back_populates="account")
     balances: Mapped[list["AccountBalance"]] = relationship(

@@ -33,6 +33,7 @@ _MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20MB — plenty for a statement, guards 
 async def preview_statement(
     file: UploadFile = File(...),
     statement_year: int = Form(default_factory=lambda: datetime.utcnow().year),
+    account_id: int | None = Form(None),
     db: Session = Depends(get_db),
 ):
     filename = (file.filename or "").lower()
@@ -49,7 +50,12 @@ async def preview_statement(
         raise HTTPException(400, "File too large")
 
     if is_csv:
-        result = parse_csv_statement(raw)
+        forced_flip = None
+        if account_id is not None:
+            account = db.get(Account, account_id)
+            if account is not None:
+                forced_flip = account.csv_amount_sign_flipped
+        result = parse_csv_statement(raw, forced_flip=forced_flip)
     else:
         result = parse_credit_card_statement(raw, statement_year=statement_year)
     seed_default_categories(db)
@@ -81,6 +87,7 @@ async def preview_statement(
         account_last_four=result.account_last_four,
         transactions=transactions,
         warnings=result.warnings,
+        flip_amount_sign_applied=result.flip_amount_sign_applied,
     )
 
 
@@ -121,6 +128,14 @@ def confirm_statement(payload: ImportRequest, db: Session = Depends(get_db)):
         raise HTTPException(404, "Account not found")
     if payload.on_duplicate not in ("block", "skip", "import"):
         raise HTTPException(400, "on_duplicate must be block, skip, or import")
+
+    if account.csv_amount_sign_flipped is None and payload.amount_sign_flipped is not None:
+        # First CSV import for this account that made a flip decision —
+        # lock it in so every later import trusts it instead of re-running
+        # the per-file majority-vote guess, which can misjudge a period
+        # with relatively few debits.
+        account.csv_amount_sign_flipped = payload.amount_sign_flipped
+        db.commit()
 
     dup_flags = _duplicate_flags(db, account.id, payload.transactions)
     duplicate_count = sum(dup_flags)

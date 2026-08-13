@@ -35,6 +35,11 @@ export default function UploadForm({
   const [periodLabel, setPeriodLabel] = useState("");
   const [transactions, setTransactions] = useState<ParsedTransaction[] | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
+  // Whether this file's single-Amount-column CSV had its signs flipped —
+  // null when there was no such decision (a PDF, or separate debit/credit
+  // columns). Carried into confirmStatement so a first-ever decision for
+  // this account gets locked in, instead of re-guessed on every import.
+  const [signFlipApplied, setSignFlipApplied] = useState<boolean | null>(null);
   const [phase, setPhase] = useState<"idle" | "parsing" | "importing">("idle");
   const [message, setMessage] = useState<string | null>(null);
   const [duplicateInfo, setDuplicateInfo] = useState<{
@@ -97,9 +102,10 @@ export default function UploadForm({
     setMessage(null);
     setDuplicateInfo(null);
     try {
-      const preview = await previewStatement(file, statementYear);
+      const preview = await previewStatement(file, statementYear, accountId);
       setTransactions(preview.transactions);
       setWarnings(preview.warnings);
+      setSignFlipApplied(preview.flip_amount_sign_applied);
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Failed to parse statement");
     } finally {
@@ -125,7 +131,8 @@ export default function UploadForm({
         accountId,
         periodLabel,
         transactions,
-        onDuplicate
+        onDuplicate,
+        signFlipApplied
       );
       if (result.status === "duplicates") {
         setDuplicateInfo({ duplicates: result.duplicates, total: result.total });

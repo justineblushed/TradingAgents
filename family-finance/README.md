@@ -89,19 +89,39 @@ machine running the backend.
   When spending exceeds income, there's no fabricated flow into savings —
   a negative-value link isn't meaningful in a Sankey — the gap is
   reported as a number instead.
-- **Sign Check** (`/sign-check`): finds transactions filed under an income
-  category (Employment Income, Rental Income, ...) but stored with a
-  positive amount instead of the negative this app's convention expects.
-  One of these doesn't just look odd on its own — it drags the income
-  total on the Dashboard, Cash Flow, and that category's drill-down
-  toward zero or negative, since all three negate a category's raw total
-  to show it as a positive number. Usually left over from a statement
+- **Sign Check** (`/sign-check`): finds transactions whose amount sign
+  contradicts their category's kind — an income category (Employment
+  Income, Rental Income, ...) stored positive instead of negative, or an
+  expense category stored negative instead of positive. These are shown
+  in two separate groups because they carry different confidence: income
+  stored positive has no legitimate exception, so it's pre-selected for a
+  one-click fix — it drags the income total on the Dashboard, Cash Flow,
+  and that category's drill-down toward zero or negative, since all three
+  negate a category's raw total to show it as a positive number. Expense
+  stored negative is often a genuine refund netted against that category
+  on purpose, so it's surfaced for review instead of pre-selected — check
+  the description and amount before deciding it's actually a sign bug
+  rather than a return. Both are usually left over from a statement
   imported before a CSV's sign convention was reconciled, or a manual
   recategorization onto a row whose amount didn't get reconsidered.
   Dashboard and Cash Flow show a banner linking here whenever their
   income figure is actually negative; each flagged row can be fixed
   individually or in bulk, and the fix re-validates every row itself
   rather than trusting a stale list.
+- **Per-account CSV sign convention memory**: a single "Amount" column CSV
+  (as opposed to separate debit/credit columns) doesn't say which sign
+  convention it uses, so the parser guesses from a simple rule — in any
+  real statement, withdrawals vastly outnumber deposits, so a file where
+  negative amounts are the strict majority must be using the opposite
+  convention from this app's and gets every sign flipped. That guess is
+  re-run from scratch on every file, with no memory of what an account's
+  statements actually use — a period with relatively few debits, or an
+  unusually deposit-heavy month, can get it wrong, and re-importing the
+  same statement would reproduce the exact same wrong signs. Once an
+  account's first such CSV is confirmed, its decision is remembered
+  (`Account.csv_amount_sign_flipped`); every later import for that account
+  trusts it instead of re-guessing, so this specific failure mode can't
+  recur for an account after its first import.
 - **Duplicates** (`/duplicates`): finds transactions already sitting in
   the database more than once with the same date, description, and
   amount — the kind that slips in from a re-uploaded statement kept on

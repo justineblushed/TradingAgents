@@ -5,8 +5,8 @@ from datetime import date
 from app.parsers.csv_statement import parse_csv_statement
 
 
-def _parse(text: str):
-    return parse_csv_statement(text.encode("utf-8"))
+def _parse(text: str, forced_flip: bool | None = None):
+    return parse_csv_statement(text.encode("utf-8"), forced_flip=forced_flip)
 
 
 LEDGER_CSV = """Card,Date,Category,Transaction Details,Funds Out,Funds In
@@ -178,3 +178,57 @@ def test_headerless_debit_convention_is_also_detected():
     )
     grocer = next(t for t in result.transactions if "GROCER" in t.description)
     assert grocer.amount == 84.20
+
+
+# --- forced_flip: an account's remembered convention overrides the guess ---
+#
+# The majority-vote heuristic can misjudge a period with relatively few
+# debits or an unusually deposit-heavy month — it re-guesses from scratch
+# on every file, with no memory of what the account's statements actually
+# use. Once an account's convention is known, a caller can force it
+# instead of trusting the heuristic's per-file guess.
+
+
+def test_flip_decision_is_reported_on_the_result():
+    result = _parse(SIMPLII_STYLE_CSV)
+    assert result.flip_amount_sign_applied is True
+
+    result = _parse(
+        "Date,Description,Amount\n2026-07-01,SAMPLE RESTAURANT,45.00\n"
+    )
+    assert result.flip_amount_sign_applied is False
+
+
+def test_two_column_and_pdf_style_files_report_no_flip_decision():
+    result = _parse(LEDGER_CSV)  # funds out / funds in columns, no single Amount column
+    assert result.flip_amount_sign_applied is None
+
+
+def test_forced_flip_true_overrides_a_heuristic_that_would_say_no():
+    """A deposit-heavy period where deposits aren't a strict minority: the
+    heuristic alone would leave it unflipped, reproducing the sign bug —
+    forcing the account's established convention corrects it anyway."""
+    csv_text = """Date,Description,Amount
+2026-07-01,SAMPLE WITHDRAWAL,-40.00
+2026-07-02,SAMPLE DEPOSIT,500.00
+"""
+    unforced = _parse(csv_text)
+    assert unforced.flip_amount_sign_applied is False  # tie -> heuristic leaves it alone
+
+    forced = _parse(csv_text, forced_flip=True)
+    withdrawal = next(t for t in forced.transactions if "WITHDRAWAL" in t.description)
+    assert withdrawal.amount == 40.00  # flipped to money-out despite the tie
+    assert forced.flip_amount_sign_applied is True
+
+
+def test_forced_flip_false_overrides_a_heuristic_that_would_say_yes():
+    forced = _parse(SIMPLII_STYLE_CSV, forced_flip=False)
+    grocer = next(t for t in forced.transactions if "GROCER" in t.description)
+    assert grocer.amount == -84.20  # left exactly as the file had it
+    assert forced.flip_amount_sign_applied is False
+
+
+def test_forced_flip_uses_a_different_warning_than_the_guess():
+    forced = _parse(SIMPLII_STYLE_CSV, forced_flip=True)
+    assert any("established convention" in w for w in forced.warnings)
+    assert not any("looked like it uses" in w for w in forced.warnings)

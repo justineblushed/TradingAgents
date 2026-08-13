@@ -139,7 +139,16 @@ def _infer_headerless_columns(
     return date_col, desc_col, None, money_cols[0], money_cols[1]
 
 
-def parse_csv_statement(raw_bytes: bytes) -> ParseResult:
+def parse_csv_statement(raw_bytes: bytes, forced_flip: bool | None = None) -> ParseResult:
+    """Parse a CSV statement export.
+
+    forced_flip overrides the per-file majority-vote heuristic for a
+    single "Amount" column: pass an account's previously-established
+    convention (see Account.csv_amount_sign_flipped) so a low-transaction
+    or deposit-heavy statement can't get mis-detected the way the raw
+    heuristic can on its own. Leave it None for a first-ever import — the
+    heuristic then makes the initial call, and the caller can persist it.
+    """
     result = ParseResult()
     # utf-8-sig strips the BOM Excel prepends to CSV exports.
     text = raw_bytes.decode("utf-8-sig", errors="replace")
@@ -186,16 +195,29 @@ def parse_csv_statement(raw_bytes: bytes) -> ParseResult:
         data_rows = rows
         first_line = 1
 
-    flip_amount_sign = (
-        amount_col is not None and _should_flip_single_amount_column(data_rows, amount_col)
-    )
-    if flip_amount_sign:
+    if amount_col is None:
+        flip_amount_sign = False
+    elif forced_flip is not None:
+        flip_amount_sign = forced_flip
+    else:
+        flip_amount_sign = _should_flip_single_amount_column(data_rows, amount_col)
+
+    if amount_col is not None:
+        result.flip_amount_sign_applied = flip_amount_sign
+
+    if flip_amount_sign and forced_flip is None:
         result.warnings.append(
             "This file's Amount column looked like it uses the opposite sign "
             "convention from this app (more withdrawals than deposits came "
             "out negative) — signs were flipped so spending shows as a "
             "positive amount. Check a few rows below before importing; if "
             "something looks backwards, let us know."
+        )
+    elif flip_amount_sign and forced_flip is not None:
+        result.warnings.append(
+            "Signs were flipped to match this account's established "
+            "convention (recorded from an earlier statement) rather than "
+            "guessed from this file alone."
         )
 
     for line_no, row in enumerate(data_rows, start=first_line):

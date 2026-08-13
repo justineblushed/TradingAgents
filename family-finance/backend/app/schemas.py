@@ -17,6 +17,11 @@ class StatementPreview(BaseModel):
     account_last_four: str = ""
     transactions: list[ParsedTransaction]
     warnings: list[str] = []
+    # Whether a single-Amount-column CSV's signs were flipped, or None when
+    # there was no such decision (a PDF, or separate debit/credit columns).
+    # Echoed back at confirm time so the account's first such decision can
+    # be locked in without re-deriving it.
+    flip_amount_sign_applied: bool | None = None
 
 
 class ImportRequest(BaseModel):
@@ -26,6 +31,9 @@ class ImportRequest(BaseModel):
     # "block": refuse with a 409 if any transaction already exists (default);
     # "skip": import only the new ones; "import": import everything anyway.
     on_duplicate: str = "block"
+    # Carried over from the preview that produced these transactions — see
+    # StatementPreview.flip_amount_sign_applied.
+    amount_sign_flipped: bool | None = None
 
 
 class TransactionOut(BaseModel):
@@ -276,10 +284,19 @@ class SpendingControl(BaseModel):
 
 
 class SignIssue(BaseModel):
-    """A transaction filed under an income category but stored with a
-    positive (money-out) amount instead of negative (money-in) — the one
-    mismatch that actually drags income totals negative everywhere they're
-    shown, rather than just looking odd on its own."""
+    """A transaction whose amount sign doesn't match its category's kind.
+
+    Two distinct directions, with two different confidence levels:
+    - "income_positive": filed under an income category but stored
+      positive instead of negative. Unambiguous — an income row has no
+      legitimate reason to be positive — so this is safe to pre-select
+      and bulk-fix.
+    - "expense_negative": filed under an expense category but stored
+      negative instead of positive. Ambiguous — a small negative amount
+      under an expense category is often a genuine refund netted against
+      that category on purpose, not a bug — so this is surfaced for
+      review rather than pre-selected.
+    """
 
     id: int
     trans_date: date
@@ -287,6 +304,7 @@ class SignIssue(BaseModel):
     amount: float
     category: str
     account_name: str
+    direction: Literal["income_positive", "expense_negative"]
 
 
 class SignIssueFixRequest(BaseModel):

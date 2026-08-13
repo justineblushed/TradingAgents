@@ -133,6 +133,10 @@ def _migrate_existing_tables() -> bool:
             conn.execute(
                 text("UPDATE accounts SET account_type = 'other_asset' WHERE account_type = 'other'")
             )
+            if "csv_amount_sign_flipped" not in cols:
+                conn.execute(
+                    text("ALTER TABLE accounts ADD COLUMN csv_amount_sign_flipped BOOLEAN")
+                )
             if "sort_order" not in cols:
                 conn.execute(text("ALTER TABLE accounts ADD COLUMN sort_order INTEGER"))
                 # Backfill using the same order the page has always shown

@@ -136,24 +136,40 @@ def set_tags(
     return _to_out(transaction)
 
 
+def _is_sign_issue(txn: Transaction) -> str | None:
+    """Returns the issue direction if txn's amount sign contradicts its
+    category's kind, else None. Kept as a single source of truth so the
+    list endpoint and the fix endpoint's re-check can never drift apart."""
+    if txn.category is None:
+        return None
+    if txn.category.kind == CategoryKind.income and txn.amount > 0:
+        return "income_positive"
+    if txn.category.kind == CategoryKind.expense and txn.amount < 0:
+        return "expense_negative"
+    return None
+
+
 @router.get("/sign-issues", response_model=list[SignIssue])
 def list_sign_issues(db: Session = Depends(get_db)):
-    """Income-kind transactions stored with a positive amount.
+    """Transactions whose amount sign contradicts their category's kind.
 
-    This app's convention is negative = money in; every place that
-    reports income (dashboard, cash flow, category drill-down) negates a
-    category's raw total to display it as a positive number. A
-    transaction stored the wrong way round doesn't just look odd on its
-    own — it drags every one of those totals toward zero or negative,
-    usually because it was imported before a CSV's own sign convention
-    was reconciled against this app's. This finds every such row so it
-    can be corrected explicitly rather than guessed at.
+    This app's convention is negative = money in, positive = money out;
+    every place that reports income or spending (dashboard, cash flow,
+    category drill-down) relies on that. Two directions, at two
+    different confidence levels — see SignIssue's docstring. Both are
+    usually left over from a CSV whose own sign convention wasn't fully
+    reconciled against this app's at import time.
     """
     rows = (
         db.query(Transaction)
         .join(Category)
         .options(joinedload(Transaction.category), joinedload(Transaction.account))
-        .filter(Category.kind == CategoryKind.income, Transaction.amount > 0)
+        .filter(
+            or_(
+                and_(Category.kind == CategoryKind.income, Transaction.amount > 0),
+                and_(Category.kind == CategoryKind.expense, Transaction.amount < 0),
+            )
+        )
         .order_by(Transaction.trans_date.desc())
         .all()
     )
@@ -165,6 +181,7 @@ def list_sign_issues(db: Session = Depends(get_db)):
             amount=float(r.amount),
             category=r.category.name,
             account_name=r.account.name if r.account else "",
+            direction=_is_sign_issue(r),
         )
         for r in rows
     ]
@@ -184,7 +201,7 @@ def fix_sign_issues(payload: SignIssueFixRequest, db: Session = Depends(get_db))
         # else may have already fixed or recategorized this row since it
         # was listed, and flipping a now-correct row would just reintroduce
         # the bug the other way.
-        if txn.category and txn.category.kind == CategoryKind.income and txn.amount > 0:
+        if _is_sign_issue(txn) is not None:
             txn.amount = -txn.amount
             fixed += 1
         else:

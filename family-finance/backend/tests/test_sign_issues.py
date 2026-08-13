@@ -74,15 +74,27 @@ def test_a_positive_income_row_is_flagged(db):
     assert issues[0].amount == 3200.00
     assert issues[0].category == "Employment Income"
     assert issues[0].account_name == "Sample Chequing"
+    assert issues[0].direction == "income_positive"
 
 
-def test_a_normal_expense_refund_is_not_flagged(db):
-    """A negative amount on an expense category is an ordinary refund, not
-    a sign issue — flagging every one of these would bury the real
-    problem under noise."""
+def test_a_normal_positive_expense_charge_is_not_flagged(db):
     _txn(db, date(2026, 7, 3), "SAMPLE GROCER", 120.00, "Groceries")
-    _txn(db, date(2026, 7, 9), "SAMPLE GROCER REFUND", -20.00, "Groceries")
     assert list_sign_issues(db) == []
+
+
+def test_an_expense_row_stored_negative_is_flagged_as_lower_confidence(db):
+    """A negative amount on an expense category is often an ordinary
+    refund netted against that category on purpose, not a bug — but it
+    can also be the mirror image of the income-direction bug: a debit
+    imported with the wrong sign under a real expense category. It's
+    surfaced for review with its own direction, rather than either being
+    invisible (the old behaviour) or treated as unambiguous the way an
+    income-positive row is."""
+    bad = _txn(db, date(2026, 7, 9), "SAMPLE CAR PAYMENT", -392.50, "Groceries")
+    issues = list_sign_issues(db)
+    assert len(issues) == 1
+    assert issues[0].id == bad.id
+    assert issues[0].direction == "expense_negative"
 
 
 def test_multiple_issues_across_categories_and_accounts_are_all_found(db):
@@ -136,7 +148,7 @@ def test_fixing_an_already_correct_row_is_a_safe_no_op(db):
     assert good.amount == -3200.00  # untouched
 
 
-def test_fixing_an_expense_row_is_refused_even_if_requested(db):
+def test_fixing_a_normal_positive_expense_row_is_refused_even_if_requested(db):
     """The fix endpoint re-validates every id itself rather than trusting
     the caller's list — a stale or tampered request must not flip a row
     that was never actually a sign issue."""
@@ -146,6 +158,19 @@ def test_fixing_an_expense_row_is_refused_even_if_requested(db):
     assert result.already_ok == 1
     db.refresh(row)
     assert row.amount == 120.00
+
+
+def test_fixing_an_expense_negative_row_works_when_explicitly_requested(db):
+    """Unlike income-positive, an expense-negative row isn't pre-selected
+    by default (it could be a genuine refund) — but once a user reviews
+    it and decides it's actually wrong, fixing it should work the same
+    way as the unambiguous direction."""
+    bad = _txn(db, date(2026, 7, 9), "SAMPLE CAR PAYMENT", -392.50, "Groceries")
+    result = fix_sign_issues(SignIssueFixRequest(transaction_ids=[bad.id]), db)
+    assert result.fixed == 1
+    assert result.already_ok == 0
+    db.refresh(bad)
+    assert bad.amount == 392.50
 
 
 def test_fixing_a_nonexistent_id_is_silently_skipped(db):
