@@ -78,6 +78,25 @@ def _preview(db, csv_text, account_id=None):
     )
 
 
+# A minimal handcrafted empty PDF — no real statement content, just enough
+# structure for pdfplumber to open it as an (empty) one-page document.
+EMPTY_PDF_BYTES = (
+    b"%PDF-1.4\n"
+    b"1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+    b"2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n"
+    b"3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]/Resources<<>>>>endobj\n"
+    b"trailer<</Root 1 0 R>>\n"
+    b"%%EOF"
+)
+
+
+def _preview_pdf(db):
+    upload = _FakeUpload("statement.pdf", EMPTY_PDF_BYTES, content_type="application/pdf")
+    return asyncio.run(
+        preview_statement(file=upload, statement_year=2026, account_id=None, db=db)
+    )
+
+
 def _confirm(db, account_id, amount_sign_flipped, transactions=None):
     return confirm_statement(
         ImportRequest(
@@ -173,3 +192,16 @@ def test_locking_in_does_not_block_the_normal_import(db):
     assert result["imported"] == 1
     db.refresh(account)
     assert account.csv_amount_sign_flipped is True
+
+
+# --- is_credit_card_statement: lets the frontend warn on a mismatched account ---
+
+
+def test_a_csv_preview_is_not_flagged_as_a_credit_card_statement(db):
+    preview = _preview(db, SIMPLII_STYLE_CSV)
+    assert preview.is_credit_card_statement is False
+
+
+def test_a_pdf_preview_is_flagged_as_a_credit_card_statement(db):
+    preview = _preview_pdf(db)
+    assert preview.is_credit_card_statement is True

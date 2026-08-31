@@ -8,7 +8,7 @@ confirms get persisted to the local database.
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.categorize import match_rule, seed_default_categories, suggest_category
 from app.db import get_db
@@ -28,7 +28,9 @@ from app.schemas import (
     ParsedTransaction,
     ResetAllRequest,
     ResetAllResult,
+    StatementDeleteResult,
     StatementPreview,
+    StatementSummary,
 )
 
 router = APIRouter(prefix="/statements", tags=["statements"])
@@ -95,6 +97,7 @@ async def preview_statement(
         transactions=transactions,
         warnings=result.warnings,
         flip_amount_sign_applied=result.flip_amount_sign_applied,
+        is_credit_card_statement=is_pdf,
     )
 
 
@@ -215,6 +218,51 @@ def confirm_statement(payload: ImportRequest, db: Session = Depends(get_db)):
         "imported": len(to_import),
         "skipped_duplicates": skipped,
     }
+
+
+@router.get("", response_model=list[StatementSummary])
+def list_statements(account_id: int | None = None, db: Session = Depends(get_db)):
+    """Every confirmed import, newest first — lets a specific one be found
+    and undone (see DELETE /statements/{id}) without touching any other
+    account's history, e.g. a statement confirmed into the wrong account
+    by mistake."""
+    query = db.query(Statement).options(joinedload(Statement.account))
+    if account_id is not None:
+        query = query.filter(Statement.account_id == account_id)
+    rows = query.order_by(Statement.imported_at.desc()).all()
+    return [
+        StatementSummary(
+            id=s.id,
+            account_id=s.account_id,
+            account_name=s.account.name if s.account else "",
+            period_label=s.period_label,
+            imported_at=s.imported_at,
+            transaction_count=s.transaction_count,
+        )
+        for s in rows
+    ]
+
+
+@router.delete("/{statement_id}", response_model=StatementDeleteResult)
+def delete_statement(statement_id: int, db: Session = Depends(get_db)):
+    """Undo one confirmed import: delete every transaction that came from
+    it, and the statement record itself. Scoped to exactly that one
+    import — every other statement, on this account or any other, is
+    untouched. The precise fix for a statement confirmed into the wrong
+    account, without resetting everything."""
+    statement = db.get(Statement, statement_id)
+    if statement is None:
+        raise HTTPException(404, "Statement not found")
+
+    transactions = db.query(Transaction).filter(Transaction.statement_id == statement_id).all()
+    deleted = len(transactions)
+    for txn in transactions:
+        # ORM-level delete (not a bulk query.delete()) so the tags
+        # association table gets cleaned up along with each row.
+        db.delete(txn)
+    db.delete(statement)
+    db.commit()
+    return StatementDeleteResult(deleted_transactions=deleted)
 
 
 @router.post("/reset-all", response_model=ResetAllResult)

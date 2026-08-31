@@ -22,6 +22,24 @@ class StatementPreview(BaseModel):
     # Echoed back at confirm time so the account's first such decision can
     # be locked in without re-deriving it.
     flip_amount_sign_applied: bool | None = None
+    # True when the file was parsed by the PDF credit-card parser, so the
+    # frontend can warn if the selected account isn't typed as a credit
+    # card — the exact mix-up that lands a card statement on the wrong
+    # account by accident.
+    is_credit_card_statement: bool = False
+
+
+class StatementSummary(BaseModel):
+    id: int
+    account_id: int
+    account_name: str
+    period_label: str
+    imported_at: datetime
+    transaction_count: int
+
+
+class StatementDeleteResult(BaseModel):
+    deleted_transactions: int
 
 
 class ResetAllRequest(BaseModel):

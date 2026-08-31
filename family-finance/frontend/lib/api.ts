@@ -14,6 +14,11 @@ export type StatementPreview = {
   transactions: ParsedTransaction[];
   warnings: string[];
   flip_amount_sign_applied: boolean | null;
+  // True when the file was parsed as a credit-card PDF statement — lets
+  // the upload form warn if the selected account isn't typed as a credit
+  // card, the exact mix-up of a card statement landing on the wrong
+  // account by accident.
+  is_credit_card_statement: boolean;
 };
 
 export const ASSET_ACCOUNT_TYPES = [
@@ -729,6 +734,30 @@ export async function resetAllTransactions(): Promise<ResetAllResult> {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ confirm: true }),
     })
+  );
+}
+
+export type StatementSummary = {
+  id: number;
+  account_id: number;
+  account_name: string;
+  period_label: string;
+  imported_at: string;
+  transaction_count: number;
+};
+
+export async function listStatements(accountId?: number): Promise<StatementSummary[]> {
+  const qs = accountId ? `?account_id=${accountId}` : "";
+  return asJson(await fetch(`${API_BASE}/statements${qs}`));
+}
+
+export type StatementDeleteResult = {
+  deleted_transactions: number;
+};
+
+export async function deleteStatement(statementId: number): Promise<StatementDeleteResult> {
+  return asJson(
+    await fetch(`${API_BASE}/statements/${statementId}`, { method: "DELETE" })
   );
 }
 

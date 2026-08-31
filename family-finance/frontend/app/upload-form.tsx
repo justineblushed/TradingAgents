@@ -40,6 +40,11 @@ export default function UploadForm({
   // columns). Carried into confirmStatement so a first-ever decision for
   // this account gets locked in, instead of re-guessed on every import.
   const [signFlipApplied, setSignFlipApplied] = useState<boolean | null>(null);
+  // True when this file parsed as a credit-card PDF statement — used to
+  // warn if the selected account isn't typed as a credit card, the exact
+  // mix-up of a card statement landing on the wrong account by accident.
+  const [isCreditCardStatement, setIsCreditCardStatement] = useState(false);
+  const [mismatchAcknowledged, setMismatchAcknowledged] = useState(false);
   const [phase, setPhase] = useState<"idle" | "parsing" | "importing">("idle");
   const [message, setMessage] = useState<string | null>(null);
   const [duplicateInfo, setDuplicateInfo] = useState<{
@@ -48,6 +53,11 @@ export default function UploadForm({
   } | null>(null);
   const [showAddAccount, setShowAddAccount] = useState(false);
   const busy = phase !== "idle";
+  const selectedAccount = accounts.find((a) => a.id === accountId) ?? null;
+  const showMismatchWarning =
+    isCreditCardStatement &&
+    !!selectedAccount &&
+    selectedAccount.account_type !== "credit_card";
   // With zero accounts there's nothing to pick from, so skip the dropdown
   // entirely and go straight to the add-account form instead of showing it
   // empty and making the user find a toggle to reveal the only usable path.
@@ -106,6 +116,8 @@ export default function UploadForm({
       setTransactions(preview.transactions);
       setWarnings(preview.warnings);
       setSignFlipApplied(preview.flip_amount_sign_applied);
+      setIsCreditCardStatement(preview.is_credit_card_statement);
+      setMismatchAcknowledged(false);
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Failed to parse statement");
     } finally {
@@ -166,7 +178,10 @@ export default function UploadForm({
               </label>
               <select
                 value={accountId ?? ""}
-                onChange={(e) => setAccountId(Number(e.target.value))}
+                onChange={(e) => {
+                  setAccountId(Number(e.target.value));
+                  setMismatchAcknowledged(false);
+                }}
                 className="mt-1 rounded-md border border-slate-300 px-2 py-1 text-sm"
               >
                 {accounts.map((a) => (
@@ -337,6 +352,29 @@ export default function UploadForm({
         </div>
       )}
 
+      {showMismatchWarning && selectedAccount && (
+        <div className="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800">
+          <p className="font-medium">
+            This looks like a credit card statement, but "{selectedAccount.name}" is
+            typed as {ACCOUNT_TYPE_LABELS[selectedAccount.account_type]}.
+          </p>
+          <p className="mt-1 text-xs text-red-700">
+            Double-check the account dropdown above before importing — this is the
+            exact mistake that lands a card statement on the wrong account. If a
+            transaction ends up on the wrong account, undo just that import from
+            its "Import history" on the Statement Log page.
+          </p>
+          <label className="mt-2 flex items-center gap-2 text-xs font-medium text-red-800">
+            <input
+              type="checkbox"
+              checked={mismatchAcknowledged}
+              onChange={(e) => setMismatchAcknowledged(e.target.checked)}
+            />
+            I checked the account and want to import anyway
+          </label>
+        </div>
+      )}
+
       {transactions && (
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <h2 className="mb-3 text-sm font-medium text-slate-600">
@@ -403,14 +441,14 @@ export default function UploadForm({
               <div className="mt-3 flex flex-wrap gap-2">
                 <button
                   onClick={() => handleConfirm("skip")}
-                  disabled={busy}
+                  disabled={busy || (showMismatchWarning && !mismatchAcknowledged)}
                   className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50"
                 >
                   Skip duplicates, import the rest
                 </button>
                 <button
                   onClick={() => handleConfirm("import")}
-                  disabled={busy}
+                  disabled={busy || (showMismatchWarning && !mismatchAcknowledged)}
                   className="rounded-md border border-amber-300 bg-white px-3 py-1.5 text-sm font-medium text-amber-800 hover:bg-amber-100 disabled:opacity-50"
                 >
                   Import anyway (keep duplicates)
@@ -427,7 +465,7 @@ export default function UploadForm({
           ) : (
             <button
               onClick={() => handleConfirm()}
-              disabled={busy}
+              disabled={busy || (showMismatchWarning && !mismatchAcknowledged)}
               className="mt-4 rounded-md bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50"
             >
               Confirm &amp; Import

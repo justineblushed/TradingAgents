@@ -126,6 +126,19 @@ machine running the backend.
   convention" selector ("let the app guess" / "already matches this app" /
   "needs signs flipped") — so re-uploading statements after a reset
   doesn't have to hope the first file's guess is the right one.
+- **Undoing one import**: each confirmed statement is its own record
+  (`Statement`), and every transaction it created remembers which one.
+  Expanding "View import history" on an account (Statement Log page)
+  lists every import for that account — period label, date, transaction
+  count — each with its own "Undo this import" button. This is the fix
+  for a statement confirmed into the wrong account by mistake (picked
+  the wrong one in the dropdown): undo deletes exactly that import's
+  transactions and its statement record, and nothing else — no other
+  import, on that account or any other, is touched. When uploading, if
+  the file was parsed as a credit-card PDF statement but the selected
+  account isn't typed as a credit card, a warning appears right there
+  before you can confirm — the same mix-up, caught before it happens
+  instead of after.
 - **Clearing everything and starting over**: for when a sign or import
   mistake left too many rows wrong across too many accounts to review one
   at a time, the Statement Log page has a "Danger zone" — type

@@ -6,7 +6,10 @@ import {
   AccountCoverage,
   CoverageSummary,
   MonthCoverage,
+  StatementSummary,
+  deleteStatement,
   getStatementCoverage,
+  listStatements,
   resetAllTransactions,
   skipCoverageMonth,
   unskipCoverageMonth,
@@ -328,6 +331,96 @@ function AccountCard({
             upload now
           </button>
         </p>
+      )}
+
+      {account.months.length > 0 && (
+        <ImportHistory accountId={account.account_id} onChanged={onChanged} />
+      )}
+    </div>
+  );
+}
+
+function ImportHistory({
+  accountId,
+  onChanged,
+}: {
+  accountId: number;
+  onChanged: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [statements, setStatements] = useState<StatementSummary[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [undoingId, setUndoingId] = useState<number | null>(null);
+
+  function load() {
+    listStatements(accountId)
+      .then(setStatements)
+      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load"));
+  }
+
+  function toggle() {
+    if (!expanded) load();
+    setExpanded((v) => !v);
+  }
+
+  async function handleUndo(statement: StatementSummary) {
+    const confirmed = window.confirm(
+      `Undo this import? This permanently deletes all ${statement.transaction_count} ` +
+        `transaction${statement.transaction_count === 1 ? "" : "s"} from "${statement.period_label || "this statement"}" ` +
+        `(imported ${new Date(statement.imported_at).toLocaleDateString()}). ` +
+        "Other imports, on this or any other account, are untouched. This cannot be undone."
+    );
+    if (!confirmed) return;
+    setUndoingId(statement.id);
+    setError(null);
+    try {
+      await deleteStatement(statement.id);
+      load();
+      onChanged();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to undo");
+    } finally {
+      setUndoingId(null);
+    }
+  }
+
+  return (
+    <div className="mt-3 border-t border-slate-100 pt-2">
+      <button
+        onClick={toggle}
+        className="text-xs font-medium text-slate-400 hover:text-slate-600"
+      >
+        {expanded ? "Hide import history" : "View import history"}
+      </button>
+      {expanded && (
+        <div className="mt-2 space-y-1.5">
+          {error && <p className="text-xs text-red-600">{error}</p>}
+          {statements === null && !error && (
+            <p className="text-xs text-slate-400">Loading…</p>
+          )}
+          {statements !== null && statements.length === 0 && (
+            <p className="text-xs text-slate-400">No imports recorded for this account.</p>
+          )}
+          {statements?.map((s) => (
+            <div
+              key={s.id}
+              className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-100 px-2 py-1.5 text-xs"
+            >
+              <span className="text-slate-600">
+                {s.period_label || "(no label)"} — {s.transaction_count} transaction
+                {s.transaction_count === 1 ? "" : "s"} — imported{" "}
+                {new Date(s.imported_at).toLocaleDateString()}
+              </span>
+              <button
+                onClick={() => handleUndo(s)}
+                disabled={undoingId === s.id}
+                className="font-medium text-red-600 hover:text-red-700 disabled:opacity-50"
+              >
+                {undoingId === s.id ? "Undoing…" : "Undo this import"}
+              </button>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );
