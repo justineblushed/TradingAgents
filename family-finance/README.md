@@ -25,9 +25,23 @@ machine running the backend.
   already on one of those pages.
 - **Uploading a statement** happens from the Statement Log page (`+
   Upload Statement` expands the form inline — it isn't a separate page):
-  choose PDF or CSV → preview parsed transactions → edit categories
-  inline → confirm import. A missing month's own "upload now" opens the
-  same form pre-selecting that account.
+  choose PDF or CSV first (no account needed yet) → the file parses and
+  previews immediately → then choose or add the account, and the
+  statement year for a PDF → edit categories inline → confirm import.
+  File-first, account-second on purpose: picking an account is a step
+  that's easy to rush past on autopilot, and doing it after you can
+  already see what's in the file (transaction count, dates, and — for a
+  card statement — the last four digits) gives you something concrete to
+  check it against instead of a blind guess made before the file is even
+  read. Changing the account or the year after the fact re-parses the
+  same file rather than leaving a stale preview in place, so the sign
+  convention and the credit-card mismatch warning below always match
+  whichever account is currently selected. If a statement reports its own
+  account number and it matches one already on file, the right account is
+  pre-selected automatically instead of asked for; the first import for
+  an account that doesn't have one on file yet remembers the number for
+  next time. A missing month's own "upload now" opens the same form
+  pre-selecting that account.
 - Self-service categories (`/categories` page): add/edit keywords/delete,
   each one tagged `expense`, `income`, or `transfer`.
 - **Category drill-down** (`/categories/<name>`): click any bar in the
